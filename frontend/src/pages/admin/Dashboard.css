@@ -1,0 +1,66 @@
+.dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+}
+
+.cars-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 2rem;
+    padding-bottom: 2rem;
+}
+
+.car-card {
+    padding: 0;
+    overflow: hidden;
+    transition: var(--transition);
+}
+
+.car-card:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--box-shadow-hover);
+}
+
+.car-image {
+    height: 200px;
+    background-size: cover;
+    background-position: center;
+    background-color: #f1f5f9;
+    /* Slate 100 placeholder */
+}
+
+.car-details {
+    padding: 1.5rem;
+}
+
+.car-details h3 {
+    margin: 0 0 0.5rem 0;
+    font-size: 1.25rem;
+}
+
+.car-info {
+    display: flex;
+    gap: 1rem;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    margin-bottom: 1rem;
+}
+
+.car-price {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--secondary-color);
+    margin: 0 0 1.5rem 0;
+}
+
+.car-actions {
+    display: flex;
+    gap: 1rem;
+}
+
+.car-actions button {
+    flex: 1;
+    padding: 8px 0;
+}
