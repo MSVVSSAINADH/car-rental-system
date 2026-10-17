@@ -24,6 +24,7 @@ public class CustomerServiceImpl implements CustomerService {
     private final UserRepository userRepository;
     private final BookingRepository bookingRepository;
     private final InvoiceService invoiceService;
+    private final com.carrental.repository.PaymentRepository paymentRepository;
 
     @Override
     public List<CarDto> getAllCars() {
@@ -169,8 +170,16 @@ public class CustomerServiceImpl implements CustomerService {
             }
 
             booking.setPaymentStatus(com.carrental.enums.PaymentStatus.PAID);
-            // Optionally update booking status to something like "PAID" or keep "APPROVED"
             bookingRepository.save(booking);
+
+            com.carrental.entity.Payment payment = paymentRepository.findByBookingId(bookingId)
+                    .orElse(new com.carrental.entity.Payment());
+            payment.setBooking(booking);
+            payment.setAmount(booking.getPrice());
+            payment.setTransactionId(transactionId != null && !transactionId.isEmpty() ? transactionId : "TXN-" + System.currentTimeMillis());
+            payment.setStatus(com.carrental.enums.PaymentStatus.PAID);
+            paymentRepository.save(payment);
+
             return true;
         }
         return false;

@@ -1,14 +1,24 @@
 package com.carrental.dto;
 
+import com.carrental.configuration.FlexibleDateTimeDeserializer;
 import com.carrental.enums.BookingStatus;
+import com.fasterxml.jackson.annotation.JsonFormat;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import lombok.Data;
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Data
 public class BookACarDto {
     private Long id;
-    private java.time.LocalDateTime fromDate;
-    private java.time.LocalDateTime toDate;
+
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm:ss")
+    @JsonDeserialize(using = FlexibleDateTimeDeserializer.class)
+    private LocalDateTime fromDate;
+
+    @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm:ss")
+    @JsonDeserialize(using = FlexibleDateTimeDeserializer.class)
+    private LocalDateTime toDate;
+
     private Long days;
     private Double price;
     private BookingStatus bookingStatus;
@@ -22,5 +32,49 @@ public class BookACarDto {
     private String carImage;
     private String rejectionReason;
     private com.carrental.enums.PaymentStatus paymentStatus;
-}
 
+    // Compatibility accessors for varying frontend property names
+    public Double getTotalPrice() {
+        return price;
+    }
+
+    public void setTotalPrice(Double totalPrice) {
+        this.price = totalPrice;
+    }
+
+    public String getUsername() {
+        return username;
+    }
+
+    public void setUsername(String username) {
+        this.username = username;
+    }
+
+    public String getUserName() {
+        return username;
+    }
+
+    public void setUserName(String userName) {
+        this.username = userName;
+    }
+
+    public String getUserEmail() {
+        return email;
+    }
+
+    public void setUserEmail(String userEmail) {
+        this.email = userEmail;
+    }
+
+    public String getStatus() {
+        return bookingStatus != null ? bookingStatus.name() : null;
+    }
+
+    public void setStatus(String status) {
+        if (status != null) {
+            try {
+                this.bookingStatus = BookingStatus.valueOf(status.toUpperCase());
+            } catch (Exception ignored) {}
+        }
+    }
+}

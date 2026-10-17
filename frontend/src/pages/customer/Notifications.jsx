@@ -2,18 +2,29 @@ import React, { useEffect, useState } from 'react';
 import api from '../../services/api';
 
 const Notifications = () => {
-    const user = JSON.parse(localStorage.getItem('user'));
-    const [notifications, setNotifications] = useState([]);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        if (user?.id) {
-            api.get(`/customer/notifications/${user.id}`)
-                .then(res => setNotifications(res.data))
-                .catch(console.error)
-                .finally(() => setLoading(false));
+    const user = React.useMemo(() => {
+        try {
+            return JSON.parse(localStorage.getItem('user'));
+        } catch {
+            return null;
         }
     }, []);
+    const [notifications, setNotifications] = useState([]);
+    const [loading, setLoading] = useState(() => Boolean(user?.id));
+
+    useEffect(() => {
+        if (!user?.id) return;
+        let isMounted = true;
+        api.get(`/customer/notifications/${user.id}`)
+            .then(res => {
+                if (isMounted) setNotifications(res.data);
+            })
+            .catch(console.error)
+            .finally(() => {
+                if (isMounted) setLoading(false);
+            });
+        return () => { isMounted = false; };
+    }, [user?.id]);
 
     const markRead = async (id) => {
         try {

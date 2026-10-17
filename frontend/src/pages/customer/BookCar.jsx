@@ -10,88 +10,73 @@ const BookCar = () => {
     const [car, setCar] = useState(null);
     const [fromDate, setFromDate] = useState('');
     const [toDate, setToDate] = useState('');
-    const [totalPrice, setTotalPrice] = useState(0);
-    const [discountedPrice, setDiscountedPrice] = useState(0);
     const [isNewCustomer, setIsNewCustomer] = useState(false);
     const [bookingType, setBookingType] = useState('self');
-    const user = JSON.parse(localStorage.getItem('user'));
-
-    const [dateError, setDateError] = useState('');
+    const user = React.useMemo(() => {
+        try {
+            return JSON.parse(localStorage.getItem('user'));
+        } catch {
+            return null;
+        }
+    }, []);
 
     useEffect(() => {
-        fetchCar();
-        checkNewCustomer();
-    }, [id]);
+        let isMounted = true;
+        api.get(`/customer/car/${id}`)
+            .then(response => {
+                if (isMounted) setCar(response.data);
+            })
+            .catch(error => {
+                console.error("Error fetching car:", error);
+            });
 
-    // Real-time validation
-    useEffect(() => {
+        if (user?.id) {
+            api.get(`/customer/car/bookings/${user.id}`)
+                .then(response => {
+                    if (isMounted) {
+                        const userBookings = response.data;
+                        setIsNewCustomer(Array.isArray(userBookings) && userBookings.length < 5);
+                    }
+                })
+                .catch(error => {
+                    console.error("Error checking bookings:", error);
+                    if (isMounted) setIsNewCustomer(false);
+                });
+        }
+        return () => { isMounted = false; };
+    }, [id, user?.id]);
+
+    // Real-time validation derived via useMemo
+    const dateError = React.useMemo(() => {
         const today = moment().startOf('day');
-        let error = '';
-
-        if (fromDate) {
-            if (moment(fromDate).isBefore(today)) {
-                error = "Booking date cannot be in the past!";
-            }
+        if (fromDate && moment(fromDate).isBefore(today)) {
+            return "Booking date cannot be in the past!";
         }
-
-        if (toDate && !error) {
+        if (toDate) {
             if (moment(toDate).isBefore(today)) {
-                error = "End date cannot be in the past!";
+                return "End date cannot be in the past!";
             } else if (fromDate && moment(toDate).isBefore(moment(fromDate))) {
-                error = "End date cannot be before start date";
+                return "End date cannot be before start date";
             }
         }
-
-        setDateError(error);
+        return '';
     }, [fromDate, toDate]);
 
-    useEffect(() => {
+    // Pricing calculation derived via useMemo
+    const { totalPrice, discountedPrice } = React.useMemo(() => {
         if (car && fromDate && toDate) {
             const start = moment(fromDate);
             const end = moment(toDate);
             const days = end.diff(start, 'days');
 
-            // Only calculate price if dates are valid
             if (days > 0 && !dateError) {
                 const basePrice = days * car.pricePerDay;
-                setTotalPrice(basePrice);
-
-                // Apply 30% discount for new customers
-                if (isNewCustomer) {
-                    setDiscountedPrice(Math.round(basePrice * 0.7));
-                } else {
-                    setDiscountedPrice(0);
-                }
-            } else {
-                setTotalPrice(0);
-                setDiscountedPrice(0);
+                const discPrice = isNewCustomer ? Math.round(basePrice * 0.7) : 0;
+                return { totalPrice: basePrice, discountedPrice: discPrice };
             }
         }
-    }, [fromDate, toDate, car, isNewCustomer, dateError]);
-
-    const fetchCar = async () => {
-        try {
-            const response = await api.get(`/customer/car/${id}`);
-            setCar(response.data);
-        } catch (error) {
-            console.error("Error fetching car:", error);
-            // navigate('/customer/dashboard'); // Optional: redirect on error
-        }
-    }
-
-    const checkNewCustomer = async () => {
-        if (!user || !user.id) return;
-        try {
-            const response = await api.get(`/customer/car/bookings/${user.id}`);
-            const userBookings = response.data;
-            // Changed limit from 3 to 5
-            setIsNewCustomer(Array.isArray(userBookings) && userBookings.length < 5);
-        } catch (error) {
-            console.error("Error checking bookings:", error);
-            // Default to not new customer on error to avoid accidentally giving discount
-            setIsNewCustomer(false);
-        }
-    }
+        return { totalPrice: 0, discountedPrice: 0 };
+    }, [car, fromDate, toDate, dateError, isNewCustomer]);
 
     const handleBook = () => {
         if (dateError) {
@@ -99,13 +84,13 @@ const BookCar = () => {
         }
 
         if (!fromDate || !toDate) {
-            setDateError("Please select both dates");
+            alert("Please select both dates");
             return;
         }
 
         // Check for driving license
         const currentUser = JSON.parse(localStorage.getItem('user'));
-        if (bookingType === 'self' && (!currentUser || !currentUser.licenseUrl)) {
+        if (bookingType === 'self' && (!currentUser || (!currentUser.licenseUrl && !currentUser.licenseImage))) {
             alert("Please update your driving license in your profile to proceed with Self Drive booking!");
             navigate('/customer/profile');
             return;
@@ -113,7 +98,6 @@ const BookCar = () => {
 
         const finalPrice = (isNewCustomer && discountedPrice > 0) ? discountedPrice : totalPrice;
 
-        const bookings = JSON.parse(localStorage.getItem('bookings') || '[]');
         const newBooking = {
             id: Date.now(),
             carId: id,
@@ -129,7 +113,7 @@ const BookCar = () => {
             carBrand: car.brand,
             carModel: car.model,
             carImage: car.imageUrl,
-            bookingType: bookingType
+            bookingType: bookingType === 'self' ? 'SELF_DRIVE' : 'WITH_DRIVER'
         };
 
         // Navigate to payment page with booking details

@@ -1,0 +1,18 @@
+# Logs
+*.log
+backend/*.log
+
+# IDE and OS
+.idea/
+.vscode/
+.DS_Store
+*.suo
+*.user
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Backend temporary files
+backend/target/surefire-reports/
+backend/target/maven-status/

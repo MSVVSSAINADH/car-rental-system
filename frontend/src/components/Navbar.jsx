@@ -6,7 +6,16 @@ import './Navbar.css';
 const Navbar = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    const [user, setUser] = useState(null);
+    // Read stored user directly during render synchronized with route location
+    const user = React.useMemo(() => {
+        try {
+            return JSON.parse(localStorage.getItem('user'));
+        } catch {
+            return null;
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [location.key]);
+
     const [scrolled, setScrolled] = useState(false);
     const [dropdownOpen, setDropdownOpen] = useState(false);
     const [mobileOpen, setMobileOpen] = useState(false);
@@ -20,25 +29,12 @@ const Navbar = () => {
     }, []);
 
     useEffect(() => {
-        const storedUser = JSON.parse(localStorage.getItem('user'));
-        if (storedUser?.id) {
-            setUser(storedUser);
-            if (storedUser.role !== 'ADMIN') {
-                api.get(`/customer/profile/${storedUser.id}`)
-                    .then(res => {
-                        const fresh = { ...res.data, token: storedUser.token };
-                        setUser(fresh);
-                        localStorage.setItem('user', JSON.stringify(fresh));
-                    })
-                    .catch(() => {});
-                api.get(`/customer/notifications/${storedUser.id}/unread-count`)
-                    .then(res => setUnreadCount(res.data || 0))
-                    .catch(() => {});
-            }
-        } else {
-            setUser(null);
+        if (user?.id && user.role !== 'ADMIN') {
+            api.get(`/customer/notifications/${user.id}/unread-count`)
+                .then(res => setUnreadCount(res.data || 0))
+                .catch(() => {});
         }
-    }, [location]);
+    }, [user?.id, user?.role]);
 
     useEffect(() => {
         const handleClickOutside = (e) => {
@@ -52,7 +48,6 @@ const Navbar = () => {
 
     const handleLogout = () => {
         localStorage.removeItem('user');
-        setUser(null);
         navigate('/login');
     };
 

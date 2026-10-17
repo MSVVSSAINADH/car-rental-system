@@ -20,17 +20,16 @@ const UpdateCar = () => {
     });
 
     useEffect(() => {
-        fetchCar();
+        let isMounted = true;
+        api.get(`/admin/car/${id}`)
+            .then(res => {
+                if (isMounted) setFormData(res.data);
+            })
+            .catch(err => {
+                console.error(err);
+            });
+        return () => { isMounted = false; };
     }, [id]);
-
-    const fetchCar = async () => {
-        try {
-            const res = await api.get(`/admin/car/${id}`);
-            setFormData(res.data);
-        } catch (err) {
-            console.error(err);
-        }
-    }
 
     const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });

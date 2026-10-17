@@ -15,8 +15,8 @@ start "Frontend Dev Server" cmd /k "cd /d "%~dp0frontend" && npm run dev"
 echo.
 echo ========================================
 echo Both services are starting in separate windows
-echo Backend: http://localhost:8080
-echo Frontend: http://localhost:5173
+echo Backend: http://localhost:7060
+echo Frontend: http://localhost:7050
 echo ========================================
 echo.
 echo Press any key to exit this window...

@@ -13,7 +13,7 @@ api.interceptors.request.use(config => {
             if (user && user.token) {
                 config.headers['Authorization'] = `Bearer ${user.token}`;
             }
-        } catch (e) {
+        } catch {
             // ignore parse error
         }
     }

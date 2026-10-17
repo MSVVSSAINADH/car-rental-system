@@ -9,12 +9,19 @@ if exist mvnw.cmd (
     goto :end
 )
 
-REM Try Method 2: Maven command
+REM Try Method 2: Maven command or MAVEN_HOME
 where mvn >nul 2>&1
 if %ERRORLEVEL% EQU 0 (
     echo [Method 2] Using Maven...
     call mvn spring-boot:run
     goto :end
+)
+if defined MAVEN_HOME (
+    if exist "%MAVEN_HOME%\bin\mvn.cmd" (
+        echo [Method 2b] Using MAVEN_HOME Maven...
+        call "%MAVEN_HOME%\bin\mvn.cmd" spring-boot:run
+        goto :end
+    )
 )
 
 REM Try Method 3: Direct JAR execution

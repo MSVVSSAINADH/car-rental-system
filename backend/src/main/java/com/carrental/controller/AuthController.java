@@ -42,12 +42,16 @@ public class AuthController {
         if (optionalUser.isPresent()) {
             User user = optionalUser.get();
             if (passwordEncoder.matches(loginRequest.getPassword(), user.getPassword())) {
+                if (user.isBlocked()) {
+                    return new ResponseEntity<>("Your account has been blocked. Please contact support.", HttpStatus.FORBIDDEN);
+                }
                 UserDto userDto = new UserDto();
                 userDto.setId(user.getId());
                 userDto.setName(user.getName());
                 userDto.setEmail(user.getEmail());
                 userDto.setRole(user.getRole());
                 userDto.setProfileImage(user.getProfileImage());
+                userDto.setBlocked(user.isBlocked());
                 userDto.setToken(jwtUtil.generateToken(user.getEmail(), user.getRole().name()));
                 return new ResponseEntity<>(userDto, HttpStatus.OK);
             } else {

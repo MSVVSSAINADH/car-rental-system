@@ -46,12 +46,9 @@ public class DataSeeder implements CommandLineRunner {
         System.out.println("Default admin user updated/created successfully!");
         System.out.println("Email: admin@carrentalx.com | Password: admin123");
 
-        // Clear existing reviews, bookings and cars, then seed new ones
-        reviewRepository.deleteAll();
-        bookingRepository.deleteAll();
-        carRepository.deleteAll();
-
-        List<Car> cars = Arrays.asList(
+        // Seed default cars and reviews only if database is empty
+        if (carRepository.count() == 0) {
+            List<Car> cars = Arrays.asList(
                 // Economy SUVs
                 createCar("Tata", "Nexon", "Blue", "Manual", "Petrol", 2024, 3500L,
                         "5-Star safety rated compact SUV with bold design and premium features.", "/cars/nexon.jpg", 5, "Economy"),
@@ -131,6 +128,7 @@ public class DataSeeder implements CommandLineRunner {
 
         reviewRepository.saveAll(Arrays.asList(review1, review2));
         System.out.println("Sample reviews seeded successfully!");
+        }
     }
 
     private Car createCar(String brand, String model, String color, String transmission,

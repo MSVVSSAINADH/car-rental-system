@@ -13,7 +13,7 @@ import java.util.concurrent.TimeUnit;
 public class RateLimitingInterceptor implements HandlerInterceptor {
 
     private final Map<String, Long> requestCounts = new ConcurrentHashMap<>();
-    private static final int LIMIT = 5; // requests per minute
+    private static final int LIMIT = 30; // requests per minute
     private static final long WINDOW = TimeUnit.MINUTES.toMillis(1);
 
     @Override

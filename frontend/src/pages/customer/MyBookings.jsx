@@ -2,18 +2,29 @@ import React, { useEffect, useState } from 'react';
 import api from '../../services/api';
 
 const MyBookings = () => {
-    const user = JSON.parse(localStorage.getItem('user'));
-    const [bookings, setBookings] = useState([]);
-    const [loading, setLoading] = useState(true);
-
-    useEffect(() => {
-        if (user?.id) {
-            api.get(`/customer/car/bookings/${user.id}`)
-                .then(res => setBookings(Array.isArray(res.data) ? res.data.reverse() : []))
-                .catch(console.error)
-                .finally(() => setLoading(false));
+    const user = React.useMemo(() => {
+        try {
+            return JSON.parse(localStorage.getItem('user'));
+        } catch {
+            return null;
         }
     }, []);
+    const [bookings, setBookings] = useState([]);
+    const [loading, setLoading] = useState(() => Boolean(user?.id));
+
+    useEffect(() => {
+        if (!user?.id) return;
+        let isMounted = true;
+        api.get(`/customer/car/bookings/${user.id}`)
+            .then(res => {
+                if (isMounted) setBookings(Array.isArray(res.data) ? res.data.reverse() : []);
+            })
+            .catch(console.error)
+            .finally(() => {
+                if (isMounted) setLoading(false);
+            });
+        return () => { isMounted = false; };
+    }, [user?.id]);
 
     const getStatusStyle = (status) => ({
         'APPROVED': { bg: 'rgba(16,185,129,.1)', color: '#059669', label: '✅ Approved', icon: '✅' },

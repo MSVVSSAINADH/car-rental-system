@@ -10,13 +10,17 @@ import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 
 @Service
-@RequiredArgsConstructor
 public class EmailServiceImpl implements EmailService {
 
-    private final JavaMailSender javaMailSender;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private JavaMailSender javaMailSender;
 
     @Override
     public void sendBookingConfirmation(Booking booking) {
+        if (javaMailSender == null) {
+            System.out.println("Mail sender not configured. Skipping email delivery for booking #" + booking.getId());
+            return;
+        }
         try {
             MimeMessage message = javaMailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, true);
