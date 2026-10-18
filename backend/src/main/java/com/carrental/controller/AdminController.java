@@ -13,7 +13,6 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/admin")
-@CrossOrigin("*")
 public class AdminController {
     private final AdminService adminService;
 
@@ -63,8 +62,11 @@ public class AdminController {
         return ResponseEntity.ok(adminService.getBookings());
     }
 
-    @GetMapping("/car/booking/{bookingId}/{status}")
+    @PutMapping("/car/booking/{bookingId}/{status}")
     public ResponseEntity<?> changeBookingStatus(@PathVariable Long bookingId, @PathVariable String status) {
+        if (!status.equalsIgnoreCase("approve") && !status.equalsIgnoreCase("reject")) {
+            return ResponseEntity.badRequest().body("Status must be approve or reject");
+        }
         boolean success = adminService.changeBookingStatus(bookingId, status, null);
         if (success)
             return ResponseEntity.ok(null);

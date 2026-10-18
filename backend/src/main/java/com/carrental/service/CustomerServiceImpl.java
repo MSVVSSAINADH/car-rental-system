@@ -24,7 +24,6 @@ public class CustomerServiceImpl implements CustomerService {
     private final UserRepository userRepository;
     private final BookingRepository bookingRepository;
     private final InvoiceService invoiceService;
-    private final com.carrental.repository.PaymentRepository paymentRepository;
 
     @Override
     public List<CarDto> getAllCars() {
@@ -33,12 +32,22 @@ public class CustomerServiceImpl implements CustomerService {
 
     @Override
     public boolean bookACar(BookACarDto bookACarDto) {
+        if (bookACarDto.getCarId() == null || bookACarDto.getUserId() == null ||
+                bookACarDto.getFromDate() == null || bookACarDto.getToDate() == null ||
+                bookACarDto.getBookingType() == null ||
+                bookACarDto.getFromDate().toLocalDate().isBefore(java.time.LocalDate.now()) ||
+                !bookACarDto.getToDate().isAfter(bookACarDto.getFromDate())) {
+            return false;
+        }
         Optional<Car> optionalCar = carRepository.findById(bookACarDto.getCarId());
         Optional<User> optionalUser = userRepository.findById(bookACarDto.getUserId());
 
         if (optionalCar.isPresent() && optionalUser.isPresent()) {
             Car car = optionalCar.get();
             User user = optionalUser.get();
+            if (!car.isAvailable() || user.isBlocked()) return false;
+            if (bookACarDto.getBookingType() == com.carrental.enums.BookingType.SELF_DRIVE &&
+                    (user.getLicenseImage() == null || user.getLicenseImage().isBlank())) return false;
 
             // 1. Availability Check (Overlap Detection)
             List<Booking> existingBookings = bookingRepository.findAllByCarId(car.getId());
@@ -60,24 +69,14 @@ public class CustomerServiceImpl implements CustomerService {
             booking.setBookingType(bookACarDto.getBookingType());
             booking.setPaymentStatus(com.carrental.enums.PaymentStatus.PENDING);
 
-            // 2. Dynamic Pricing Calculation & AI Price Prediction Mock
-            // Duration in hours
-            long hours = java.time.Duration.between(bookACarDto.getFromDate(), bookACarDto.getToDate()).toHours();
-            if (hours < 1) hours = 1; // Minimum 1 hour
+            long days = java.time.temporal.ChronoUnit.DAYS.between(
+                    bookACarDto.getFromDate().toLocalDate(), bookACarDto.getToDate().toLocalDate());
+            if (days <= 0) return false;
+            boolean eligibleForIntroDiscount = bookingRepository.findAllByUserId(user.getId()).size() < 5;
+            double totalPrice = car.getPricePerDay().doubleValue() * days;
+            if (eligibleForIntroDiscount) totalPrice = Math.round(totalPrice * 0.7);
 
-            double pricePerDay = car.getPricePerDay().doubleValue();
-            double pricePerHour = pricePerDay / 24.0;
-            
-            double totalPrice = hours * pricePerHour;
-            
-            // AI Mock: Price Prediction/Surge
-            // Increase price by 10% during peak hours (e.g., 6 PM to 11 PM)
-            int hourOfDay = bookACarDto.getFromDate().getHour();
-            if (hourOfDay >= 18 && hourOfDay <= 23) {
-                totalPrice *= 1.1; 
-            }
-
-            booking.setDays((hours + 23) / 24); // Ceiling division for display
+            booking.setDays(days);
             booking.setPrice(totalPrice);
 
             bookingRepository.save(booking);
@@ -159,29 +158,7 @@ public class CustomerServiceImpl implements CustomerService {
 
     @Override
     public boolean processPayment(Long bookingId, String transactionId) {
-        Optional<Booking> optionalBooking = bookingRepository.findById(bookingId);
-        if (optionalBooking.isPresent()) {
-            Booking booking = optionalBooking.get();
-            
-            // AI Mock: Fraud Detection
-            if (booking.getPrice() > 50000 && booking.getUser().isBlocked()) {
-                // Suspicious! 
-                return false; 
-            }
-
-            booking.setPaymentStatus(com.carrental.enums.PaymentStatus.PAID);
-            bookingRepository.save(booking);
-
-            com.carrental.entity.Payment payment = paymentRepository.findByBookingId(bookingId)
-                    .orElse(new com.carrental.entity.Payment());
-            payment.setBooking(booking);
-            payment.setAmount(booking.getPrice());
-            payment.setTransactionId(transactionId != null && !transactionId.isEmpty() ? transactionId : "TXN-" + System.currentTimeMillis());
-            payment.setStatus(com.carrental.enums.PaymentStatus.PAID);
-            paymentRepository.save(payment);
-
-            return true;
-        }
+        // Payment confirmation must come from a trusted payment provider integration.
         return false;
     }
 }

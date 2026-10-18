@@ -8,11 +8,15 @@ import com.carrental.entity.Booking;
 import com.carrental.entity.Car;
 import com.carrental.entity.User;
 import com.carrental.enums.BookingStatus;
+import com.carrental.enums.UserRole;
 import com.carrental.repository.BookingRepository;
 import com.carrental.repository.CarRepository;
 import com.carrental.repository.UserRepository;
+import com.carrental.repository.PaymentRepository;
+import com.carrental.enums.PaymentStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Objects;
@@ -25,6 +29,7 @@ public class AdminServiceImpl implements AdminService {
     private final CarRepository carRepository;
     private final BookingRepository bookingRepository;
     private final UserRepository userRepository;
+    private final PaymentRepository paymentRepository;
     private final EmailService emailService;
     private final NotificationService notificationService;
 
@@ -98,15 +103,18 @@ public class AdminServiceImpl implements AdminService {
     }
 
     @Override
+    @Transactional
     public boolean changeBookingStatus(Long bookingId, String status, String reason) {
+        if (status == null || (!status.equalsIgnoreCase("Approve") && !status.equalsIgnoreCase("Reject"))) return false;
         Optional<Booking> optionalBooking = bookingRepository.findById(bookingId);
         if (optionalBooking.isPresent()) {
             Booking booking = optionalBooking.get();
+            if (booking.getBookingStatus() != BookingStatus.PENDING) return false;
             Long userId = booking.getUser().getId();
             String carName = booking.getCar().getBrand() + " " + booking.getCar().getModel();
-            if (Objects.equals(status, "Approve")) {
+            if (status.equalsIgnoreCase("Approve")) {
                 booking.setBookingStatus(BookingStatus.APPROVED);
-                emailService.sendBookingConfirmation(booking);
+                bookingRepository.save(booking);
                 notificationService.sendNotification(userId,
                         "✅ Your booking for " + carName + " has been approved! Get ready to drive.");
             } else {
@@ -118,7 +126,11 @@ public class AdminServiceImpl implements AdminService {
                 }
                 notificationService.sendNotification(userId, msg);
             }
-            bookingRepository.save(booking);
+            if (status.equalsIgnoreCase("Approve")) {
+                emailService.sendBookingConfirmation(booking);
+            } else {
+                bookingRepository.save(booking);
+            }
             return true;
         }
         return false;
@@ -137,9 +149,9 @@ public class AdminServiceImpl implements AdminService {
                 .filter(b -> b.getBookingStatus() == BookingStatus.APPROVED).count());
         stats.setRejectedBookings(allBookings.stream()
                 .filter(b -> b.getBookingStatus() == BookingStatus.REJECTED).count());
-        double totalRevenue = allBookings.stream()
-                .filter(b -> b.getBookingStatus() == BookingStatus.APPROVED)
-                .mapToDouble(b -> b.getPrice() != null ? b.getPrice() : 0)
+        double totalRevenue = paymentRepository.findAll().stream()
+                .filter(payment -> payment.getStatus() == PaymentStatus.PAID)
+                .mapToDouble(payment -> payment.getAmount() != null ? payment.getAmount() : 0)
                 .sum();
         stats.setTotalRevenue(totalRevenue);
         return stats;
@@ -164,6 +176,7 @@ public class AdminServiceImpl implements AdminService {
         Optional<User> optionalUser = userRepository.findById(userId);
         if (optionalUser.isPresent()) {
             User user = optionalUser.get();
+            if (user.getRole() != UserRole.CUSTOMER) return false;
             user.setBlocked(!user.isBlocked());
             userRepository.save(user);
             return true;

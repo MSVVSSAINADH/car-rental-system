@@ -21,6 +21,6 @@ public enum BookingType {
                 return type;
             }
         }
-        return SELF_DRIVE;
+        throw new IllegalArgumentException("Unsupported booking type: " + value);
     }
 }

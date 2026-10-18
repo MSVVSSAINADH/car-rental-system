@@ -10,6 +10,7 @@ import com.carrental.enums.UserRole;
 import com.carrental.repository.BookingRepository;
 import com.carrental.repository.CarRepository;
 import com.carrental.repository.UserRepository;
+import com.carrental.repository.PaymentRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,6 +37,9 @@ class AdminServiceTest {
 
     @Mock
     private UserRepository userRepository;
+
+    @Mock
+    private PaymentRepository paymentRepository;
 
     @Mock
     private EmailService emailService;
@@ -126,6 +130,16 @@ class AdminServiceTest {
     }
 
     @Test
+    void testCannotBlockAdministrator() {
+        sampleUser.setRole(UserRole.ADMIN);
+        when(userRepository.findById(1L)).thenReturn(Optional.of(sampleUser));
+
+        assertFalse(adminService.blockUser(1L));
+        assertFalse(sampleUser.isBlocked());
+        verify(userRepository, never()).save(any(User.class));
+    }
+
+    @Test
     void testGetStats() {
         when(carRepository.count()).thenReturn(10L);
         when(bookingRepository.count()).thenReturn(2L);
@@ -139,6 +153,6 @@ class AdminServiceTest {
         assertEquals(2L, stats.getTotalBookings());
         assertEquals(5L, stats.getTotalUsers());
         assertEquals(1L, stats.getApprovedBookings());
-        assertEquals(9000.0, stats.getTotalRevenue());
+        assertEquals(0.0, stats.getTotalRevenue());
     }
 }

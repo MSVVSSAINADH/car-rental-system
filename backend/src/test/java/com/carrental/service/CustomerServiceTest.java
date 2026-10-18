@@ -5,7 +5,6 @@ import com.carrental.dto.CarDto;
 import com.carrental.dto.UserDto;
 import com.carrental.entity.Booking;
 import com.carrental.entity.Car;
-import com.carrental.entity.Payment;
 import com.carrental.entity.User;
 import com.carrental.enums.BookingStatus;
 import com.carrental.enums.BookingType;
@@ -13,13 +12,13 @@ import com.carrental.enums.PaymentStatus;
 import com.carrental.enums.UserRole;
 import com.carrental.repository.BookingRepository;
 import com.carrental.repository.CarRepository;
-import com.carrental.repository.PaymentRepository;
 import com.carrental.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
@@ -43,9 +42,6 @@ class CustomerServiceTest {
 
     @Mock
     private BookingRepository bookingRepository;
-
-    @Mock
-    private PaymentRepository paymentRepository;
 
     @Mock
     private InvoiceService invoiceService;
@@ -72,6 +68,7 @@ class CustomerServiceTest {
         sampleUser.setEmail("jane@example.com");
         sampleUser.setRole(UserRole.CUSTOMER);
         sampleUser.setBlocked(false);
+        sampleUser.setLicenseImage("license-image");
     }
 
     @Test
@@ -97,7 +94,10 @@ class CustomerServiceTest {
 
         boolean result = customerService.bookACar(dto);
         assertTrue(result);
-        verify(bookingRepository, times(1)).save(any(Booking.class));
+        ArgumentCaptor<Booking> bookingCaptor = ArgumentCaptor.forClass(Booking.class);
+        verify(bookingRepository, times(1)).save(bookingCaptor.capture());
+        assertEquals(2L, bookingCaptor.getValue().getDays());
+        assertEquals(4200.0, bookingCaptor.getValue().getPrice());
     }
 
     @Test
@@ -128,20 +128,24 @@ class CustomerServiceTest {
     }
 
     @Test
-    void testProcessPaymentSuccess() {
-        Booking booking = new Booking();
-        booking.setId(50L);
-        booking.setPrice(4500.0);
-        booking.setUser(sampleUser);
-        booking.setPaymentStatus(PaymentStatus.PENDING);
+    void testBookACarRejectsInvalidDateRangeBeforeRepositoryAccess() {
+        BookACarDto dto = new BookACarDto();
+        dto.setCarId(1L);
+        dto.setUserId(10L);
+        dto.setFromDate(LocalDateTime.now().minusDays(1));
+        dto.setToDate(LocalDateTime.now().plusDays(1));
+        dto.setBookingType(BookingType.WITH_DRIVER);
 
-        when(bookingRepository.findById(50L)).thenReturn(Optional.of(booking));
-        when(paymentRepository.findByBookingId(50L)).thenReturn(Optional.empty());
+        assertFalse(customerService.bookACar(dto));
+        verify(carRepository, never()).findById(any());
+        verify(bookingRepository, never()).save(any(Booking.class));
+    }
 
+    @Test
+    void testPaymentIsNotMarkedPaidWithoutProviderVerification() {
         boolean success = customerService.processPayment(50L, "TXN-TEST-123");
-        assertTrue(success);
-        assertEquals(PaymentStatus.PAID, booking.getPaymentStatus());
-        verify(paymentRepository, times(1)).save(any(Payment.class));
+        assertFalse(success);
+        verify(bookingRepository, never()).save(any(Booking.class));
     }
 
     @Test

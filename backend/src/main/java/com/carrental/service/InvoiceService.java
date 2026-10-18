@@ -14,11 +14,11 @@ public class InvoiceService {
         html.append("<p>Date: ").append(java.time.LocalDate.now()).append("</p>");
         html.append("<hr/>");
         html.append("<h3>Customer Details</h3>");
-        html.append("<p>Name: ").append(booking.getUser().getName()).append("</p>");
-        html.append("<p>Email: ").append(booking.getUser().getEmail()).append("</p>");
+        html.append("<p>Name: ").append(HtmlEscaper.escape(booking.getUser().getName())).append("</p>");
+        html.append("<p>Email: ").append(HtmlEscaper.escape(booking.getUser().getEmail())).append("</p>");
         html.append("<hr/>");
         html.append("<h3>Car Details</h3>");
-        html.append("<p>Car: ").append(booking.getCar().getBrand()).append(" ").append(booking.getCar().getModel()).append("</p>");
+        html.append("<p>Car: ").append(HtmlEscaper.escape(booking.getCar().getBrand())).append(" ").append(HtmlEscaper.escape(booking.getCar().getModel())).append("</p>");
         html.append("<p>Period: ").append(booking.getFromDate()).append(" to ").append(booking.getToDate()).append("</p>");
         html.append("<hr/>");
         html.append("<h3>Payment Summary</h3>");

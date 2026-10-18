@@ -7,10 +7,12 @@ import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.stereotype.Service;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
-import lombok.RequiredArgsConstructor;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 @Service
 public class EmailServiceImpl implements EmailService {
+    private static final Logger LOGGER = Logger.getLogger(EmailServiceImpl.class.getName());
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private JavaMailSender javaMailSender;
@@ -30,19 +32,19 @@ public class EmailServiceImpl implements EmailService {
 
             StringBuilder body = new StringBuilder();
             body.append("<h1>Booking Confirmation</h1>");
-            body.append("<p>Dear " + booking.getUser().getName() + ",</p>");
+            body.append("<p>Dear " + HtmlEscaper.escape(booking.getUser().getName()) + ",</p>");
             body.append("<p>Your booking has been approved! Here are the details:</p>");
 
             // Receipt Details
             body.append("<h2>Receipt</h2>");
             body.append("<ul>");
-            body.append("<li><strong>Car:</strong> " + booking.getCar().getBrand() + " " + booking.getCar().getModel()
+            body.append("<li><strong>Car:</strong> " + HtmlEscaper.escape(booking.getCar().getBrand()) + " " + HtmlEscaper.escape(booking.getCar().getModel())
                     + " (" + booking.getCar().getYear() + ")</li>");
             body.append(
                     "<li><strong>Dates:</strong> " + booking.getFromDate() + " to " + booking.getToDate() + "</li>");
             body.append("<li><strong>Total Days:</strong> " + booking.getDays() + "</li>");
-            body.append("<li><strong>Price Per Day:</strong> $" + booking.getCar().getPricePerDay() + "</li>");
-            body.append("<li><strong>Total Price:</strong> $" + booking.getPrice() + "</li>");
+            body.append("<li><strong>Price Per Day:</strong> ₹" + booking.getCar().getPricePerDay() + "</li>");
+            body.append("<li><strong>Total Price:</strong> ₹" + booking.getPrice() + "</li>");
             body.append("</ul>");
 
             // Conditional Instructions
@@ -72,14 +74,13 @@ public class EmailServiceImpl implements EmailService {
             helper.setText(body.toString(), true);
 
             javaMailSender.send(message);
-            System.out.println("Email sent successfully to " + booking.getUser().getEmail());
+            LOGGER.info("Booking confirmation email sent.");
 
         } catch (MessagingException e) {
-            e.printStackTrace();
-            System.err.println("Failed to send email: " + e.getMessage());
+            LOGGER.log(Level.WARNING, "Failed to send booking confirmation email ({0}).", e.getClass().getSimpleName());
         } catch (Exception e) {
             // Catch all to prevent crashing admin approval flow if email fails
-            System.err.println("Error sending email: " + e.getMessage());
+            LOGGER.log(Level.WARNING, "Unexpected booking email error ({0}).", e.getClass().getSimpleName());
         }
     }
 }

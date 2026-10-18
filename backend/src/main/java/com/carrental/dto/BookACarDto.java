@@ -6,15 +6,18 @@ import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import lombok.Data;
 import java.time.LocalDateTime;
+import jakarta.validation.constraints.NotNull;
 
 @Data
 public class BookACarDto {
     private Long id;
 
+    @NotNull(message = "Start date is required")
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm:ss")
     @JsonDeserialize(using = FlexibleDateTimeDeserializer.class)
     private LocalDateTime fromDate;
 
+    @NotNull(message = "End date is required")
     @JsonFormat(shape = JsonFormat.Shape.STRING, pattern = "yyyy-MM-dd HH:mm:ss")
     @JsonDeserialize(using = FlexibleDateTimeDeserializer.class)
     private LocalDateTime toDate;
@@ -22,7 +25,9 @@ public class BookACarDto {
     private Long days;
     private Double price;
     private BookingStatus bookingStatus;
+    @NotNull(message = "Booking type is required")
     private com.carrental.enums.BookingType bookingType;
+    @NotNull(message = "Car is required")
     private Long carId;
     private Long userId;
     private String username;
