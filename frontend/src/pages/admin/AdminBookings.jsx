@@ -31,7 +31,7 @@ const AdminBookings = () => {
     const handleStatus = async (id, newStatus) => {
         try {
             const apiStatus = newStatus === 'Approved' ? 'Approve' : (newStatus === 'Rejected' ? 'Reject' : newStatus);
-            await api.get(`/admin/car/booking/${id}/${apiStatus}`);
+            await api.put(`/admin/car/booking/${id}/${apiStatus}`);
             fetchBookings();
         } catch (error) {
             console.error("Error updating status:", error);

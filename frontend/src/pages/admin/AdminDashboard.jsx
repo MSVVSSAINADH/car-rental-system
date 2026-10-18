@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import api from '../../services/api';
 
@@ -20,11 +20,7 @@ const AdminDashboard = () => {
     const [activeTab, setActiveTab] = useState('fleet');
     const navigate = useNavigate();
 
-    useEffect(() => {
-        fetchData();
-    }, []);
-
-    const fetchData = async () => {
+    const fetchData = useCallback(async () => {
         setLoading(true);
         try {
             const [carRes, bookingRes, statsRes] = await Promise.all([
@@ -40,7 +36,11 @@ const AdminDashboard = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, []);
+
+    useEffect(() => {
+        fetchData();
+    }, [fetchData]);
 
     const handleDelete = async (id) => {
         if (!window.confirm('Delete this car?')) return;
@@ -60,7 +60,7 @@ const AdminDashboard = () => {
     const handleBookingStatus = async (bookingId, status) => {
         const apiStatus = status === 'Approved' ? 'Approve' : 'Reject';
         try {
-            await api.get(`/admin/car/booking/${bookingId}/${apiStatus}`);
+            await api.put(`/admin/car/booking/${bookingId}/${apiStatus}`);
             fetchData();
         } catch (err) { console.error(err); }
     };

@@ -146,7 +146,7 @@ const UserProfile = () => {
                         {previewUrl ? (
                             <div className="license-preview">
                                 <img src={previewUrl} alt="Driving License" />
-                                <button className="btn-remove" onClick={() => { setPreviewUrl(''); setUser({ ...user, licenseUrl: '' }) }}>Remove</button>
+                                <button className="btn-remove" onClick={() => { setPreviewUrl(''); setUser({ ...user, licenseImage: '' }) }}>Remove</button>
                             </div>
                         ) : (
                             <div className="upload-placeholder">

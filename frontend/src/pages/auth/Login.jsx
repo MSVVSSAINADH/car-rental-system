@@ -39,13 +39,8 @@ const Login = () => {
             <div className="auth-illustration">
                 <div className="auth-illustration-content">
                     <div className="auth-logo">CarRental<span>X</span></div>
-                    <h2>Drive Your Dream</h2>
-                    <p>500+ verified cars. Unlimited adventures. Best prices guaranteed.</p>
-                    <div className="auth-stats">
-                        <div className="auth-stat"><strong>10K+</strong><span>Happy Customers</span></div>
-                        <div className="auth-stat"><strong>500+</strong><span>Cars Available</span></div>
-                        <div className="auth-stat"><strong>50+</strong><span>Cities</span></div>
-                    </div>
+                    <h2>Welcome back</h2>
+                    <p>Sign in to browse the current fleet and manage your booking requests.</p>
                 </div>
                 <div className="auth-illustration-overlay"></div>
             </div>
@@ -94,9 +89,6 @@ const Login = () => {
                         Don't have an account? <Link to="/signup">Create one free</Link>
                     </p>
 
-                    <div className="auth-demo-hint">
-                        <strong>Demo:</strong> admin@carrentalx.com / admin123
-                    </div>
                 </div>
             </div>
         </div>

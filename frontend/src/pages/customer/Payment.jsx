@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import './Payment.css';
@@ -7,80 +7,50 @@ const Payment = () => {
     const { state } = useLocation();
     const navigate = useNavigate();
     const [bookingDetails, setBookingDetails] = useState(null);
-    const [isProcessing, setIsProcessing] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     useEffect(() => {
-        if (state && state.booking) {
+        if (state?.booking) {
             setBookingDetails(state.booking);
         } else {
-            // If no booking data, redirect back to home or dashboard
             navigate('/customer/dashboard');
         }
     }, [state, navigate]);
 
-    const handlePayment = async () => {
-        setIsProcessing(true);
-
+    const submitBooking = async () => {
+        setIsSubmitting(true);
         try {
             await api.post('/customer/car/book', bookingDetails);
-            // Redirect to bookings page on success
             navigate('/customer/bookings');
         } catch (error) {
-            console.error("Payment/Booking failed:", error);
-            alert("Payment failed. Please try again.");
+            console.error('Booking request failed:', error);
+            alert('Unable to submit this booking request. Please check the dates and try again.');
         } finally {
-            setIsProcessing(false);
+            setIsSubmitting(false);
         }
     };
 
-    if (!bookingDetails) return <div className="text-center mt-5">Loading Payment Details...</div>;
+    if (!bookingDetails) return <div className="text-center mt-5">Loading booking details...</div>;
 
     return (
         <div className="payment-container fade-in">
             <div className="payment-card">
                 <div className="payment-header">
-                    <h2>Complete Your Payment</h2>
-                    <p>Scan the QR code to pay instantly</p>
+                    <h2>Review your booking</h2>
+                    <p>Your request will be sent to the rental administrator for approval.</p>
                 </div>
 
                 <div className="amount-section">
-                    <span className="label">Total Amount</span>
+                    <span className="label">Estimated booking total</span>
                     <span className="value">₹{bookingDetails.totalPrice}</span>
                 </div>
 
-                <div className="qr-section">
-                    <div className="qr-frame">
-                        <img
-                            src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=upi://pay?pa=rentcar@upi&pn=RentCar&am=${bookingDetails.totalPrice}&cu=INR`}
-                            alt="Payment QR Code"
-                            className="qr-code"
-                        />
-                    </div>
-                    <p className="scan-instruction">Scan with any UPI App (GPay, PhonePe, Paytm)</p>
-                </div>
+                <p className="text-muted">
+                    Online payment is not configured. Submitting this request does not charge you.
+                </p>
 
-                <div className="payment-methods">
-                    <h3>Other Payment Methods</h3>
-                    <div className="methods-grid">
-                        <div className="method-item disabled">
-                            <span className="icon">💳</span>
-                            <span>Credit/Debit Card</span>
-                            <span className="badge">Coming Soon</span>
-                        </div>
-                        <div className="method-item disabled">
-                            <span className="icon">🏦</span>
-                            <span>Net Banking</span>
-                            <span className="badge">Coming Soon</span>
-                        </div>
-                    </div>
-                </div>
-
-                <button
-                    className="pay-btn"
-                    onClick={handlePayment}
-                    disabled={isProcessing}
-                >
-                    {isProcessing ? 'Processing...' : `Verify & Pay ₹${bookingDetails.totalPrice}`}
+                <button className="pay-btn" onClick={submitBooking} disabled={isSubmitting}>
+                    {isSubmitting ? 'Submitting...' : 'Submit booking request'}
                 </button>
             </div>
         </div>

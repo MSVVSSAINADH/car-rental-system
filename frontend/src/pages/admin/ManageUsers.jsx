@@ -5,6 +5,11 @@ const ManageUsers = () => {
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
+    const [updatingUserId, setUpdatingUserId] = useState(null);
+    const currentUserId = (() => {
+        try { return JSON.parse(localStorage.getItem('user') || '{}').id; }
+        catch { return null; }
+    })();
 
     useEffect(() => {
         api.get('/admin/users')
@@ -12,6 +17,20 @@ const ManageUsers = () => {
             .catch(console.error)
             .finally(() => setLoading(false));
     }, []);
+
+    const toggleUserBlock = async (user) => {
+        setUpdatingUserId(user.id);
+        try {
+            await api.put(`/admin/user/${user.id}/block`);
+            setUsers(current => current.map(item =>
+                item.id === user.id ? { ...item, blocked: !item.blocked } : item
+            ));
+        } catch (error) {
+            console.error('Unable to update user access:', error);
+        } finally {
+            setUpdatingUserId(null);
+        }
+    };
 
     const filtered = users.filter(u =>
         u.name?.toLowerCase().includes(search.toLowerCase()) ||
@@ -52,6 +71,7 @@ const ManageUsers = () => {
                                 <th>Email</th>
                                 <th>Role</th>
                                 <th>Profile</th>
+                                <th>Access</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -87,10 +107,19 @@ const ManageUsers = () => {
                                             : <span className="badge badge-muted">No photo</span>
                                         }
                                     </td>
+                                    <td>
+                                        <button
+                                            className={`btn btn-sm ${u.blocked ? 'btn-success' : 'btn-danger'}`}
+                                            disabled={updatingUserId === u.id || u.role === 'ADMIN' || u.id === currentUserId}
+                                            onClick={() => toggleUserBlock(u)}
+                                        >
+                                            {updatingUserId === u.id ? 'Updating…' : u.role === 'ADMIN' ? 'Admin' : u.blocked ? 'Unblock' : 'Block'}
+                                        </button>
+                                    </td>
                                 </tr>
                             ))}
                             {filtered.length === 0 && (
-                                <tr><td colSpan="5" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>No users found</td></tr>
+                                <tr><td colSpan="6" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>No users found</td></tr>
                             )}
                         </tbody>
                     </table>

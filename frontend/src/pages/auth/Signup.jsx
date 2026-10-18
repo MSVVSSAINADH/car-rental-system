@@ -54,12 +54,10 @@ const Signup = () => {
             <div className="auth-illustration">
                 <div className="auth-illustration-content">
                     <div className="auth-logo">CarRental<span>X</span></div>
-                    <h2>Join India's <br />Premium Fleet</h2>
-                    <p>Create your free account and start exploring 500+ cars across India with unbeatable prices.</p>
+                    <h2>Start your <br />next trip</h2>
+                    <p>Create an account to browse available cars and track booking requests.</p>
                     <div className="auth-stats">
-                        <div className="auth-stat"><strong>30%</strong><span>Off First Booking</span></div>
-                        <div className="auth-stat"><strong>24/7</strong><span>Support</span></div>
-                        <div className="auth-stat"><strong>Free</strong><span>Cancellation</span></div>
+                        <div className="auth-stat"><strong>30%</strong><span>Off first five eligible bookings</span></div>
                     </div>
                 </div>
             </div>

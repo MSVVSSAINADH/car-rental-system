@@ -55,8 +55,8 @@ const BookCar = () => {
         if (toDate) {
             if (moment(toDate).isBefore(today)) {
                 return "End date cannot be in the past!";
-            } else if (fromDate && moment(toDate).isBefore(moment(fromDate))) {
-                return "End date cannot be before start date";
+            } else if (fromDate && !moment(toDate).isAfter(moment(fromDate))) {
+                return "End date must be after start date";
             }
         }
         return '';
