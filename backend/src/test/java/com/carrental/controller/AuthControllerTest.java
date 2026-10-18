@@ -110,7 +110,7 @@ class AuthControllerTest {
         when(userRepository.findByEmail("missing@example.com")).thenReturn(Optional.empty());
 
         ResponseEntity<?> response = authController.login(request);
-        assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
+        assertEquals(HttpStatus.UNAUTHORIZED, response.getStatusCode());
     }
 
     @Test

@@ -24,7 +24,7 @@ public class RateLimitingInterceptor implements HandlerInterceptor {
         long now = System.currentTimeMillis();
         requestCounts.entrySet().removeIf(entry -> now - entry.getValue() > WINDOW);
 
-        long count = requestCounts.keySet().stream().filter(k -> k.startsWith(ip)).count();
+        long count = requestCounts.keySet().stream().filter(k -> k.startsWith(ip + ":")).count();
 
         if (count >= LIMIT) {
             response.setStatus(429); // Too Many Requests

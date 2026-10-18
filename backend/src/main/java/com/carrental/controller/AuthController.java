@@ -18,7 +18,6 @@ import java.util.Optional;
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
-@CrossOrigin("*")
 public class AuthController {
     private final AuthService authService;
     private final UserRepository userRepository;
@@ -51,20 +50,21 @@ public class AuthController {
                 userDto.setEmail(user.getEmail());
                 userDto.setRole(user.getRole());
                 userDto.setProfileImage(user.getProfileImage());
+                userDto.setLicenseImage(user.getLicenseImage());
                 userDto.setBlocked(user.isBlocked());
                 userDto.setToken(jwtUtil.generateToken(user.getEmail(), user.getRole().name()));
                 return new ResponseEntity<>(userDto, HttpStatus.OK);
             } else {
-                return new ResponseEntity<>("Wrong password", HttpStatus.UNAUTHORIZED);
+                return new ResponseEntity<>("Invalid email or password", HttpStatus.UNAUTHORIZED);
             }
         } else {
-            return new ResponseEntity<>("User not found", HttpStatus.NOT_FOUND);
+            return new ResponseEntity<>("Invalid email or password", HttpStatus.UNAUTHORIZED);
         }
     }
 
     // For initializing admin (internal use)
     @PostMapping("/admin/signup")
-    public ResponseEntity<?> signupAdmin(@RequestBody SignupRequest signupRequest) {
+    public ResponseEntity<?> signupAdmin(@jakarta.validation.Valid @RequestBody SignupRequest signupRequest) {
         if (authService.hasCustomerWithEmail(signupRequest.getEmail()))
             return new ResponseEntity<>("User already exists", HttpStatus.NOT_ACCEPTABLE);
 

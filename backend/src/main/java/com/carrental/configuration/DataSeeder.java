@@ -3,12 +3,12 @@ package com.carrental.configuration;
 import com.carrental.entity.Car;
 import com.carrental.entity.User;
 import com.carrental.enums.UserRole;
-import com.carrental.repository.BookingRepository;
 import com.carrental.repository.CarRepository;
 import com.carrental.repository.UserRepository;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Value;
 
 import java.math.BigDecimal;
 import java.util.Arrays;
@@ -20,31 +20,41 @@ import com.carrental.repository.ReviewRepository;
 public class DataSeeder implements CommandLineRunner {
     private final CarRepository carRepository;
     private final UserRepository userRepository;
-    private final BookingRepository bookingRepository;
     private final ReviewRepository reviewRepository;
     private final PasswordEncoder passwordEncoder;
 
+    @Value("${app.admin.email:}")
+    private String adminEmail;
+
+    @Value("${app.admin.password:}")
+    private String adminPassword;
+
     public DataSeeder(CarRepository carRepository, UserRepository userRepository,
-                      BookingRepository bookingRepository, ReviewRepository reviewRepository,
+                      ReviewRepository reviewRepository,
                       PasswordEncoder passwordEncoder) {
         this.carRepository = carRepository;
         this.userRepository = userRepository;
-        this.bookingRepository = bookingRepository;
         this.reviewRepository = reviewRepository;
         this.passwordEncoder = passwordEncoder;
     }
 
     @Override
     public void run(String... args) throws Exception {
-        // Create or update default admin user with BCrypt password
-        User admin = userRepository.findByEmail("admin@carrentalx.com").orElse(new User());
-        admin.setName("Admin");
-        admin.setEmail("admin@carrentalx.com");
-        admin.setPassword(passwordEncoder.encode("admin123"));
-        admin.setRole(UserRole.ADMIN);
-        userRepository.save(admin);
-        System.out.println("Default admin user updated/created successfully!");
-        System.out.println("Email: admin@carrentalx.com | Password: admin123");
+        User admin = null;
+        if (adminEmail != null && !adminEmail.isBlank() && adminPassword != null && !adminPassword.isBlank()) {
+            admin = userRepository.findByEmail(adminEmail).orElse(null);
+            if (admin == null) {
+                admin = new User();
+                admin.setName("Admin");
+                admin.setEmail(adminEmail);
+                admin.setPassword(passwordEncoder.encode(adminPassword));
+                admin.setRole(UserRole.ADMIN);
+                userRepository.save(admin);
+                System.out.println("Configured administrator account created.");
+            }
+        } else {
+            System.out.println("Admin bootstrap skipped; configure ADMIN_EMAIL and ADMIN_PASSWORD to create an administrator.");
+        }
 
         // Seed default cars and reviews only if database is empty
         if (carRepository.count() == 0) {
@@ -110,7 +120,8 @@ public class DataSeeder implements CommandLineRunner {
         carRepository.saveAll(cars);
         System.out.println("Cars seeded successfully! Total: " + cars.size() + " cars");
 
-        // Seed some sample reviews for the first car (Nexon) and admin user
+        // Seed sample reviews only when an administrator account is available.
+        if (admin != null) {
         Car nexon = cars.get(0);
         Review review1 = new Review();
         review1.setCar(nexon);
@@ -128,6 +139,7 @@ public class DataSeeder implements CommandLineRunner {
 
         reviewRepository.saveAll(Arrays.asList(review1, review2));
         System.out.println("Sample reviews seeded successfully!");
+        }
         }
     }
 

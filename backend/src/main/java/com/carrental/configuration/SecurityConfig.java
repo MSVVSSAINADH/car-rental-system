@@ -15,7 +15,10 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.beans.factory.annotation.Value;
+import jakarta.servlet.http.HttpServletResponse;
 
+import java.util.Arrays;
 import java.util.List;
 
 @Configuration
@@ -25,6 +28,9 @@ public class SecurityConfig {
 
     private final JwtAuthFilter jwtAuthFilter;
 
+    @Value("${app.cors.allowed-origins:http://localhost:7050}")
+    private String allowedOrigins;
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
@@ -32,9 +38,12 @@ public class SecurityConfig {
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             .sessionManagement(session ->
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .exceptionHandling(errors -> errors.authenticationEntryPoint(
+                    (request, response, exception) -> response.sendError(HttpServletResponse.SC_UNAUTHORIZED)))
             .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/api/auth/admin/signup").hasRole("ADMIN")
                 .requestMatchers("/api/auth/**").permitAll()
-                .requestMatchers(HttpMethod.GET, "/api/customer/cars", "/api/customer/car/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/customer/cars", "/api/customer/car/*", "/api/customer/car/*/reviews").permitAll()
                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 .requestMatchers("/api/customer/**").hasAnyRole("CUSTOMER", "ADMIN")
                 .anyRequest().authenticated()
@@ -52,7 +61,8 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOriginPatterns(List.of("*"));
+        config.setAllowedOriginPatterns(Arrays.stream(allowedOrigins.split(","))
+                .map(String::trim).filter(origin -> !origin.isEmpty()).toList());
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);

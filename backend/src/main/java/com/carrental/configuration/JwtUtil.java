@@ -1,11 +1,11 @@
 package com.carrental.configuration;
 
 import io.jsonwebtoken.*;
-import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.stereotype.Component;
 
 import java.security.Key;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
@@ -14,12 +14,15 @@ import java.util.function.Function;
 @Component
 public class JwtUtil {
 
-    private static final String SECRET_KEY = "carrentalx_super_secret_key_2024_secure_and_long_enough_256bits";
     private static final long EXPIRATION_MS = 86400000L; // 24 hours
+    private final Key signingKey;
 
-    private Key getSigningKey() {
-        byte[] keyBytes = SECRET_KEY.getBytes();
-        return Keys.hmacShaKeyFor(keyBytes);
+    public JwtUtil(@org.springframework.beans.factory.annotation.Value("${app.jwt.secret:}") String secret) {
+        byte[] keyBytes = secret.getBytes(StandardCharsets.UTF_8);
+        if (keyBytes.length < 32) {
+            throw new IllegalStateException("JWT secret must be configured and at least 32 bytes long");
+        }
+        this.signingKey = Keys.hmacShaKeyFor(keyBytes);
     }
 
     public String generateToken(String email, String role) {
@@ -30,7 +33,7 @@ public class JwtUtil {
                 .setSubject(email)
                 .setIssuedAt(new Date(System.currentTimeMillis()))
                 .setExpiration(new Date(System.currentTimeMillis() + EXPIRATION_MS))
-                .signWith(getSigningKey(), SignatureAlgorithm.HS256)
+                .signWith(signingKey, SignatureAlgorithm.HS256)
                 .compact();
     }
 
@@ -44,7 +47,7 @@ public class JwtUtil {
 
     public boolean isTokenValid(String token) {
         try {
-            Jwts.parserBuilder().setSigningKey(getSigningKey()).build().parseClaimsJws(token);
+            Jwts.parserBuilder().setSigningKey(signingKey).build().parseClaimsJws(token);
             return !isTokenExpired(token);
         } catch (JwtException | IllegalArgumentException e) {
             return false;
@@ -57,7 +60,7 @@ public class JwtUtil {
 
     private <T> T extractClaim(String token, Function<Claims, T> claimsResolver) {
         Claims claims = Jwts.parserBuilder()
-                .setSigningKey(getSigningKey())
+                .setSigningKey(signingKey)
                 .build()
                 .parseClaimsJws(token)
                 .getBody();

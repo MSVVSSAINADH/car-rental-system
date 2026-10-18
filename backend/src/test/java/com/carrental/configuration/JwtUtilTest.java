@@ -11,7 +11,7 @@ class JwtUtilTest {
 
     @BeforeEach
     void setUp() {
-        jwtUtil = new JwtUtil();
+        jwtUtil = new JwtUtil("test-only-jwt-secret-value-that-is-long-enough");
     }
 
     @Test
