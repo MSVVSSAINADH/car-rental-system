@@ -78,7 +78,7 @@ const BookCar = () => {
         return { totalPrice: 0, discountedPrice: 0 };
     }, [car, fromDate, toDate, dateError, isNewCustomer]);
 
-    const handleBook = () => {
+    const handleBook = async () => {
         if (dateError) {
             return;
         }
@@ -88,12 +88,27 @@ const BookCar = () => {
             return;
         }
 
-        // Check for driving license
-        const currentUser = JSON.parse(localStorage.getItem('user'));
-        if (bookingType === 'self' && (!currentUser || (!currentUser.licenseUrl && !currentUser.licenseImage))) {
-            alert("Please update your driving license in your profile to proceed with Self Drive booking!");
-            navigate('/customer/profile');
-            return;
+        // Driving licence check for Self Drive. The localStorage snapshot is
+        // taken at login and goes stale as soon as the licence is uploaded
+        // (or changed on another device), which wrongly blocked valid
+        // customers, so ask the server for the authoritative profile first.
+        if (bookingType === 'self') {
+            const currentUser = user;
+            let hasLicense = Boolean(currentUser?.licenseUrl || currentUser?.licenseImage);
+            if (currentUser?.id) {
+                try {
+                    const profile = await api.get(`/customer/profile/${currentUser.id}`);
+                    hasLicense = Boolean(profile.data?.licenseImage);
+                } catch {
+                    // Keep the stored snapshot as best effort; the backend still
+                    // rejects SELF_DRIVE bookings without a licence at submit time.
+                }
+            }
+            if (!hasLicense) {
+                alert("Please update your driving license in your profile to proceed with Self Drive booking!");
+                navigate('/customer/profile');
+                return;
+            }
         }
 
         const finalPrice = (isNewCustomer && discountedPrice > 0) ? discountedPrice : totalPrice;
