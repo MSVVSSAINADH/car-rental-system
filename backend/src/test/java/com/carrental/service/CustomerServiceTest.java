@@ -81,7 +81,7 @@ class CustomerServiceTest {
 
     @Test
     void testBookACarSuccess() {
-        when(carRepository.findById(1L)).thenReturn(Optional.of(sampleCar));
+        when(carRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(sampleCar));
         when(userRepository.findById(10L)).thenReturn(Optional.of(sampleUser));
         when(bookingRepository.findAllByCarId(1L)).thenReturn(Collections.emptyList());
 
@@ -111,7 +111,7 @@ class CustomerServiceTest {
         existing.setToDate(end);
         existing.setBookingStatus(BookingStatus.APPROVED);
 
-        when(carRepository.findById(1L)).thenReturn(Optional.of(sampleCar));
+        when(carRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(sampleCar));
         when(userRepository.findById(10L)).thenReturn(Optional.of(sampleUser));
         when(bookingRepository.findAllByCarId(1L)).thenReturn(List.of(existing));
 
@@ -137,7 +137,7 @@ class CustomerServiceTest {
         dto.setBookingType(BookingType.WITH_DRIVER);
 
         assertFalse(customerService.bookACar(dto));
-        verify(carRepository, never()).findById(any());
+        verify(carRepository, never()).findByIdForUpdate(any());
         verify(bookingRepository, never()).save(any(Booking.class));
     }
 

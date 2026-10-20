@@ -12,6 +12,7 @@ import com.carrental.repository.CarRepository;
 import com.carrental.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -31,6 +32,7 @@ public class CustomerServiceImpl implements CustomerService {
     }
 
     @Override
+    @Transactional
     public boolean bookACar(BookACarDto bookACarDto) {
         if (bookACarDto.getCarId() == null || bookACarDto.getUserId() == null ||
                 bookACarDto.getFromDate() == null || bookACarDto.getToDate() == null ||
@@ -39,7 +41,10 @@ public class CustomerServiceImpl implements CustomerService {
                 !bookACarDto.getToDate().isAfter(bookACarDto.getFromDate())) {
             return false;
         }
-        Optional<Car> optionalCar = carRepository.findById(bookACarDto.getCarId());
+        // Pessimistic write lock on the car row: serializes the availability
+        // check and the insert for this car, so two concurrent requests for the
+        // same vehicle and dates cannot both pass the overlap check (double booking).
+        Optional<Car> optionalCar = carRepository.findByIdForUpdate(bookACarDto.getCarId());
         Optional<User> optionalUser = userRepository.findById(bookACarDto.getUserId());
 
         if (optionalCar.isPresent() && optionalUser.isPresent()) {
