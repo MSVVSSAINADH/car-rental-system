@@ -38,6 +38,19 @@
   /* Typography */
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-display: 'Poppins', 'Inter', sans-serif;
+
+  /* Legacy token bridge — older components (Home, Payment, Footer, UserProfile,
+     Dashboard, BookCar) still reference these names. Map them onto the current
+     design tokens so their declarations resolve instead of being invalidated.
+     Migrate consumers to the canonical names and delete this block. */
+  --background-color: var(--bg);
+  --surface-color: var(--bg-card);
+  --primary-color: var(--primary);
+  --secondary-color: var(--secondary);
+  --text-color: var(--text);
+  --border-color: var(--border);
+  --primary-rgb: 59, 130, 246; /* rgb of --primary, for rgba(var(--primary-rgb), a) */
+  --box-shadow-hover: var(--shadow-lg);
 }
 
 /* ──────────────────────────────────────────────

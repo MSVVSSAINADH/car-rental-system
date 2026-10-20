@@ -78,7 +78,7 @@ const Notifications = () => {
                             style={{
                                 padding: '1rem 1.25rem',
                                 border: n.isRead ? '1px solid var(--border)' : '1px solid var(--primary)',
-                                background: n.isRead ? 'white' : 'rgba(79,70,229,0.04)',
+                                background: n.isRead ? 'var(--bg-card)' : 'rgba(79,70,229,0.04)',
                                 cursor: n.isRead ? 'default' : 'pointer',
                                 transition: 'all 0.2s',
                                 display: 'flex',
