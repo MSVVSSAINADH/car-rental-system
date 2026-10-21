@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../../services/api';
 import CarImage from '../../components/CarImage';
+import { useAppConfig } from '../../services/config';
 import moment from 'moment';
 import '../admin/Dashboard.css';
 
@@ -11,8 +12,12 @@ const BookCar = () => {
     const [car, setCar] = useState(null);
     const [fromDate, setFromDate] = useState('');
     const [toDate, setToDate] = useState('');
-    const [isNewCustomer, setIsNewCustomer] = useState(false);
     const [bookingType, setBookingType] = useState('self');
+    // The quote response is tagged with the dates it belongs to, so a stale
+    // quote from a previous date selection is never shown as the current one.
+    const quoteKey = `${id}|${fromDate}|${toDate}`;
+    const [quoteResult, setQuoteResult] = useState({ key: null, quote: null, error: '' });
+    const config = useAppConfig();
     const user = React.useMemo(() => {
         try {
             return JSON.parse(localStorage.getItem('user'));
@@ -31,21 +36,8 @@ const BookCar = () => {
                 console.error("Error fetching car:", error);
             });
 
-        if (user?.id) {
-            api.get(`/customer/car/bookings/${user.id}`)
-                .then(response => {
-                    if (isMounted) {
-                        const userBookings = response.data;
-                        setIsNewCustomer(Array.isArray(userBookings) && userBookings.length < 5);
-                    }
-                })
-                .catch(error => {
-                    console.error("Error checking bookings:", error);
-                    if (isMounted) setIsNewCustomer(false);
-                });
-        }
         return () => { isMounted = false; };
-    }, [id, user?.id]);
+    }, [id]);
 
     // Real-time validation derived via useMemo
     const dateError = React.useMemo(() => {
@@ -63,21 +55,39 @@ const BookCar = () => {
         return '';
     }, [fromDate, toDate]);
 
-    // Pricing calculation derived via useMemo
-    const { totalPrice, discountedPrice } = React.useMemo(() => {
-        if (car && fromDate && toDate) {
-            const start = moment(fromDate);
-            const end = moment(toDate);
-            const days = end.diff(start, 'days');
+    // The server is the only authority on price: it applies the intro
+    // discount and checks the dates against existing bookings. The browser
+    // no longer multiplies the daily rate itself.
+    useEffect(() => {
+        if (!car || !fromDate || !toDate || dateError) return undefined;
+        const controller = new AbortController();
+        const requestKey = quoteKey;
+        api.post('/customer/car/quote', { carId: id, fromDate, toDate }, { signal: controller.signal })
+            .then(({ data }) => {
+                setQuoteResult({ key: requestKey, quote: data, error: '' });
+            })
+            .catch(error => {
+                if (error.code === 'ERR_CANCELED') return;
+                setQuoteResult({
+                    key: requestKey,
+                    quote: null,
+                    error: typeof error.response?.data === 'string'
+                        ? error.response.data
+                        : 'This car could not be priced for those dates.'
+                });
+            });
+        return () => controller.abort();
+    }, [car, id, fromDate, toDate, dateError, quoteKey]);
 
-            if (days > 0 && !dateError) {
-                const basePrice = days * car.pricePerDay;
-                const discPrice = isNewCustomer ? Math.round(basePrice * 0.7) : 0;
-                return { totalPrice: basePrice, discountedPrice: discPrice };
-            }
-        }
-        return { totalPrice: 0, discountedPrice: 0 };
-    }, [car, fromDate, toDate, dateError, isNewCustomer]);
+    const quoteSettled = quoteResult.key === quoteKey;
+    const quote = quoteSettled ? quoteResult.quote : null;
+    const quoteError = quoteSettled ? quoteResult.error : '';
+    const quoteLoading = Boolean(car && fromDate && toDate && !dateError && !quoteSettled);
+
+    const isNewCustomer = Boolean(quote?.eligibleForDiscount);
+    const totalPrice = quote?.basePrice ?? 0;
+    const discountedPrice = quote?.totalPrice ?? 0;
+    const discountPercent = quote?.discountPercent ?? 0;
 
     const handleBook = async () => {
         if (dateError) {
@@ -86,6 +96,11 @@ const BookCar = () => {
 
         if (!fromDate || !toDate) {
             alert("Please select both dates");
+            return;
+        }
+
+        if (!quote) {
+            alert(quoteError || "Wait for the server to price this booking.");
             return;
         }
 
@@ -112,8 +127,6 @@ const BookCar = () => {
             }
         }
 
-        const finalPrice = (isNewCustomer && discountedPrice > 0) ? discountedPrice : totalPrice;
-
         const newBooking = {
             id: Date.now(),
             carId: id,
@@ -122,9 +135,9 @@ const BookCar = () => {
             userEmail: user.email || 'N/A',
             fromDate: fromDate,
             toDate: toDate,
-            totalPrice: finalPrice,
-            originalPrice: totalPrice,
-            discountApplied: isNewCustomer && discountedPrice > 0 ? '30%' : null,
+            totalPrice: quote.totalPrice,
+            originalPrice: quote.basePrice,
+            discountApplied: quote.discountPercent ? `${quote.discountPercent}%` : null,
             status: 'Pending',
             carBrand: car.brand,
             carModel: car.model,
@@ -189,6 +202,16 @@ const BookCar = () => {
                         </div>
                     )}
 
+                    {!dateError && quoteError && (
+                        <div role="alert" style={{ color: '#b91c1c', fontSize: '0.9rem', marginTop: '-1rem', marginBottom: '1rem' }}>
+                            {quoteError}
+                        </div>
+                    )}
+
+                    {!dateError && !quoteError && quoteLoading && (
+                        <p className="text-muted" style={{ fontSize: '0.85rem', marginTop: '-0.5rem' }}>Checking availability and price…</p>
+                    )}
+
                     <div className="booking-type-selection" style={{ marginBottom: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                         <div
                             onClick={() => setBookingType('self')}
@@ -247,7 +270,7 @@ const BookCar = () => {
                                 fontWeight: 'bold',
                                 fontSize: '0.9rem'
                             }}>
-                                30% OFF
+                                {discountPercent}% OFF
                             </div>
 
                             <h3 style={{
@@ -258,7 +281,7 @@ const BookCar = () => {
                                 gap: '8px',
                                 color: '#4338ca'
                             }}>
-                                <span>🎉</span> First 5 Bookings Special!
+                                <span>🎉</span> {config ? `First ${config.introBookingLimit} Bookings Special!` : 'Introductory Offer'}
                             </h3>
 
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
@@ -303,12 +326,19 @@ const BookCar = () => {
                         </div>
                     )}
 
-                    <button className="btn btn-primary w-full" onClick={handleBook} style={{
-                        fontSize: '1.1rem',
-                        padding: '0.8rem',
-                        background: (isNewCustomer && totalPrice > 0) ? 'linear-gradient(to right, #4f46e5, #7c3aed)' : 'var(--primary-color)'
-                    }}>
-                        {isNewCustomer && totalPrice > 0 ? `Pay ₹${discountedPrice} & Book Now` : 'Confirm Booking'}
+                    <button
+                        className="btn btn-primary w-full"
+                        onClick={handleBook}
+                        disabled={!quote || quoteLoading}
+                        style={{
+                            fontSize: '1.1rem',
+                            padding: '0.8rem',
+                            opacity: (!quote || quoteLoading) ? 0.6 : 1,
+                            cursor: (!quote || quoteLoading) ? 'not-allowed' : 'pointer',
+                            background: isNewCustomer ? 'linear-gradient(to right, #4f46e5, #7c3aed)' : 'var(--primary-color)'
+                        }}
+                    >
+                        {quote ? `Continue with ₹${quote.totalPrice}` : 'Confirm Booking'}
                     </button>
                 </div>
             </div>

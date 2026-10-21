@@ -2,15 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import CarImage from '../components/CarImage';
+import { useAppConfig } from '../services/config';
 import './Home.css';
-
-const faqs = [
-    { question: 'How do I request a car booking?', answer: 'Choose a car, select your rental dates and booking type, then submit the request. The booking remains pending until an administrator reviews it.' },
-    { question: 'Does the app take payment online?', answer: 'Online payment is not configured. Submitting a booking request does not charge you.' },
-    { question: 'What is the new customer offer?', answer: 'Customers with fewer than five existing bookings receive a 30% discount. The server calculates the final booking price.' },
-    { question: 'Do I need a driving licence?', answer: 'A licence image is required for Self Drive bookings. Upload it from your profile; images must be smaller than 500 KB.' },
-    { question: 'Can I book with a driver?', answer: 'Yes. Select With Driver when choosing the booking type.' }
-];
 
 const Home = () => {
     const navigate = useNavigate();
@@ -18,6 +11,17 @@ const Home = () => {
     const [featuredCars, setFeaturedCars] = useState([]);
     const [loadingCars, setLoadingCars] = useState(true);
     const [fleetError, setFleetError] = useState(false);
+    const config = useAppConfig();
+
+    const faqs = [
+        { question: 'How do I request a car booking?', answer: 'Choose a car, select your rental dates and booking type, then submit the request. The booking remains pending until an administrator reviews it.' },
+        { question: 'Does the app take payment online?', answer: 'Online payment is not configured. Submitting a booking request does not charge you.' },
+        { question: 'What is the new customer offer?', answer: config
+            ? `Customers with fewer than ${config.introBookingLimit} existing bookings receive a ${config.discountPercent}% discount. The server calculates the final booking price.`
+            : 'The server calculates the final booking price, including any introductory discount.' },
+        { question: 'Do I need a driving licence?', answer: 'A licence image is required for Self Drive bookings. Upload it from your profile; images must be smaller than 500 KB.' },
+        { question: 'Can I book with a driver?', answer: 'Yes. Select With Driver when choosing the booking type.' }
+    ];
 
     useEffect(() => {
         let active = true;
@@ -51,7 +55,9 @@ const Home = () => {
                 <div className="how-it-works-grid">
                     {[
                         ['🔍', 'Browse cars', 'Review current vehicle details and per-day prices.'],
-                        ['📅', 'Submit a request', 'Select dates and a booking type. Eligible new customers receive a 30% discount.'],
+                        ['📅', 'Submit a request', config
+                            ? `Select dates and a booking type. Eligible new customers receive a ${config.discountPercent}% discount.`
+                            : 'Select dates and a booking type. The server prices the booking.'],
                         ['🚗', 'Wait for review', 'An administrator reviews the request. Its status appears in your bookings.']
                     ].map(([icon, title, description], index) => (
                         <div className="step-card" key={title}>
@@ -99,7 +105,7 @@ const Home = () => {
                     <h2 className="section-title text-center">Booking <span className="text-primary">Features</span></h2>
                     <div className="features-grid">
                         <div className="feature-card"><div className="feature-icon" aria-hidden="true">📋</div><h3>Booking review</h3><p>Requests stay pending until an administrator approves or rejects them.</p></div>
-                        <div className="feature-card"><div className="feature-icon" aria-hidden="true">🎉</div><h3>New customer offer</h3><p>Eligible customers receive 30% off their first five bookings.</p></div>
+                        <div className="feature-card"><div className="feature-icon" aria-hidden="true">🎉</div><h3>New customer offer</h3><p>{config ? `Eligible customers receive ${config.discountPercent}% off their first ${config.introBookingLimit} bookings.` : 'Eligible customers receive an introductory discount on their first bookings.'}</p></div>
                         <div className="feature-card"><div className="feature-icon" aria-hidden="true">🪪</div><h3>Profile documents</h3><p>Customers can upload a profile photo and driving licence image.</p></div>
                     </div>
                 </div>

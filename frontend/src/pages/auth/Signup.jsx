@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
+import { useAppConfig } from '../../services/config';
 import './Auth.css';
 
 const getPasswordStrength = (password) => {
@@ -22,6 +23,7 @@ const Signup = () => {
     const [form, setForm] = useState({ name: '', email: '', password: '' });
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const config = useAppConfig();
     const strength = getPasswordStrength(form.password);
 
     const handleChange = e => setForm({ ...form, [e.target.name]: e.target.value });
@@ -57,7 +59,10 @@ const Signup = () => {
                     <h2>Start your <br />next trip</h2>
                     <p>Create an account to browse available cars and track booking requests.</p>
                     <div className="auth-stats">
-                        <div className="auth-stat"><strong>30%</strong><span>Off first five eligible bookings</span></div>
+                        <div className="auth-stat">
+                            <strong>{config ? `${config.discountPercent}%` : '—'}</strong>
+                            <span>{config ? `Off your first ${config.introBookingLimit} eligible bookings` : 'Introductory offer for new customers'}</span>
+                        </div>
                     </div>
                 </div>
             </div>

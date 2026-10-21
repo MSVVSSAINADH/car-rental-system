@@ -41,12 +41,13 @@ const Payment = () => {
                 </div>
 
                 <div className="amount-section">
-                    <span className="label">Estimated booking total</span>
+                    <span className="label">Quoted booking total</span>
                     <span className="value">₹{bookingDetails.totalPrice}</span>
                 </div>
 
                 <p className="text-muted">
-                    Online payment is not configured. Submitting this request does not charge you.
+                    This total comes from the server quote and is recalculated when the request is
+                    submitted. Online payment is not configured, so submitting does not charge you.
                 </p>
 
                 <button className="pay-btn" onClick={submitBooking} disabled={isSubmitting}>
