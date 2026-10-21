@@ -31,7 +31,7 @@ public class Car {
 
     private int seats;
 
-    private String category; // Economy, Premium, Luxury
+    private String category; // Budget, Mid-range, Family, SUV, Electric, Premium
 
     public CarDto getCarDto() {
         CarDto carDto = new CarDto();

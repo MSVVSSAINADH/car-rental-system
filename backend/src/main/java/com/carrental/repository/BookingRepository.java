@@ -11,5 +11,6 @@ import java.util.Optional;
 public interface BookingRepository extends JpaRepository<Booking, Long> {
     List<Booking> findAllByUserId(Long userId);
     List<Booking> findAllByCarId(Long carId);
+    boolean existsByCarId(Long carId);
     Optional<Booking> findByIdAndUserEmail(Long id, String email);
 }

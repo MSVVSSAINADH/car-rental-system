@@ -16,7 +16,7 @@ const UpdateCar = () => {
         description: '',
         imageUrl: '',
         seats: '',
-        category: 'Economy'
+        category: 'Budget'
     });
 
     useEffect(() => {
@@ -90,10 +90,12 @@ const UpdateCar = () => {
                     <div className="form-group">
                         <label className="form-label">Category</label>
                         <select name="category" value={formData.category} onChange={handleChange} className="form-input">
-                            <option value="Economy">Economy</option>
-                            <option value="Premium">Premium</option>
-                            <option value="Luxury">Luxury</option>
+                            <option value="Budget">Budget</option>
+                            <option value="Mid-range">Mid-range</option>
+                            <option value="Family">Family</option>
+                            <option value="SUV">SUV</option>
                             <option value="Electric">Electric</option>
+                            <option value="Premium">Premium</option>
                         </select>
                     </div>
                     <div className="form-group">
