@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
+import CarImage from '../../components/CarImage';
 import './CustomerDashboard.css';
 
 const SkeletonCard = () => (
@@ -168,7 +169,13 @@ const CustomerDashboard = () => {
                                     className={`favorite-btn ${favorites.includes(car.id) ? 'active' : ''}`}
                                     onClick={e => { e.stopPropagation(); setFavorites(f => f.includes(car.id) ? f.filter(x => x !== car.id) : [...f, car.id]); }}
                                 >♥</button>
-                                <div className="car-image" style={{ backgroundImage: `url(${car.imageUrl})` }}>
+                                <div className="car-image">
+                                    <CarImage
+                                        imageUrl={car.imageUrl}
+                                        brand={car.brand}
+                                        model={car.model}
+                                        className="car-image-fill"
+                                    />
                                     {car.category && (
                                         <span className="car-category-tag">{car.category}</span>
                                     )}

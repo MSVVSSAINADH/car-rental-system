@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../../services/api';
+import CarImage from '../../components/CarImage';
 import moment from 'moment';
 import '../admin/Dashboard.css';
 
@@ -141,7 +142,12 @@ const BookCar = () => {
         <div className="container fade-in" style={{ paddingTop: '2rem' }}>
             <div className="card" style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
                 <div style={{ flex: '1', minWidth: '300px' }}>
-                    <img src={car.imageUrl} alt={car.brand} style={{ width: '100%', borderRadius: '12px' }} />
+                    <CarImage
+                        imageUrl={car.imageUrl}
+                        brand={car.brand}
+                        model={car.model}
+                        className="car-image-detail"
+                    />
                 </div>
                 <div style={{ flex: '1', minWidth: '300px' }}>
                     <h2 className="text-primary">{car.brand} {car.model}</h2>

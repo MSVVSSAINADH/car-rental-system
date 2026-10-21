@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import api from '../../services/api';
+import CarImage from '../../components/CarImage';
 
 const StatCard = ({ icon, label, value, bg, color }) => (
     <div className="stat-card fade-in-up">
@@ -142,7 +143,13 @@ const AdminDashboard = () => {
                         <div className="cars-grid">
                             {cars.map(car => (
                                 <div key={car.id} className="car-card" style={{ opacity: !car.available ? 0.7 : 1 }}>
-                                    <div className="car-image" style={{ backgroundImage: `url(${car.imageUrl})` }}>
+                                    <div className="car-image">
+                                        <CarImage
+                                            imageUrl={car.imageUrl}
+                                            brand={car.brand}
+                                            model={car.model}
+                                            className="car-image-fill"
+                                        />
                                         <div style={{ position: 'absolute', top: 10, left: 10, display: 'flex', gap: 6 }}>
                                             {car.category && <span className="badge badge-primary">{car.category}</span>}
                                             {!car.available && <span className="badge badge-danger">Unavailable</span>}
@@ -206,7 +213,13 @@ const AdminDashboard = () => {
                                         <td style={{ fontWeight: 600, color: 'var(--primary)' }}>#{String(b.id).slice(-5)}</td>
                                         <td>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                                {b.carImage && <img src={b.carImage} alt="" style={{ width: 40, height: 36, borderRadius: 8, objectFit: 'cover' }} />}
+                                                <CarImage
+                                                    imageUrl={b.carImage}
+                                                    brand={b.carBrand}
+                                                    model={b.carModel}
+                                                    compact
+                                                    className="car-image-thumb"
+                                                />
                                                 <span>{b.carBrand} {b.carModel}</span>
                                             </div>
                                         </td>

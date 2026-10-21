@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
+import CarImage from '../components/CarImage';
 import './Home.css';
 
 const faqs = [
@@ -69,7 +70,14 @@ const Home = () => {
                     <div className="cars-grid">
                         {featuredCars.map(car => (
                             <div key={car.id} className="car-card card">
-                                <div className="car-image"><img src={car.imageUrl || '/tata_nexon_ev.png'} alt={`${car.brand} ${car.model}`} /></div>
+                                <div className="car-image">
+                                    <CarImage
+                                        imageUrl={car.imageUrl}
+                                        brand={car.brand}
+                                        model={car.model}
+                                        className="car-image-fill"
+                                    />
+                                </div>
                                 <div className="car-details">
                                     <div>
                                         <h3>{car.brand} {car.model}</h3>
