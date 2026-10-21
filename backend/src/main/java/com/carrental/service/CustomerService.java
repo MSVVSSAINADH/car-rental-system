@@ -2,6 +2,8 @@ package com.carrental.service;
 
 import com.carrental.dto.BookACarDto;
 import com.carrental.dto.CarDto;
+import com.carrental.dto.QuoteDto;
+import com.carrental.dto.QuoteRequestDto;
 import com.carrental.dto.UserDto;
 import java.util.List;
 
@@ -9,6 +11,8 @@ public interface CustomerService {
     List<CarDto> getAllCars();
 
     boolean bookACar(BookACarDto bookACarDto);
+
+    QuoteDto quoteCar(Long userId, QuoteRequestDto quoteRequest);
 
     CarDto getCarById(Long id);
 

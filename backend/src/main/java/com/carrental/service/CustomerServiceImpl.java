@@ -2,11 +2,14 @@ package com.carrental.service;
 
 import com.carrental.dto.BookACarDto;
 import com.carrental.dto.CarDto;
+import com.carrental.dto.QuoteDto;
+import com.carrental.dto.QuoteRequestDto;
 import com.carrental.dto.UserDto;
 import com.carrental.entity.Booking;
 import com.carrental.entity.Car;
 import com.carrental.entity.User;
 import com.carrental.enums.BookingStatus;
+import com.carrental.exception.BookingValidationException;
 import com.carrental.repository.BookingRepository;
 import com.carrental.repository.CarRepository;
 import com.carrental.repository.UserRepository;
@@ -14,6 +17,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -55,15 +61,8 @@ public class CustomerServiceImpl implements CustomerService {
                     (user.getLicenseImage() == null || user.getLicenseImage().isBlank())) return false;
 
             // 1. Availability Check (Overlap Detection)
-            List<Booking> existingBookings = bookingRepository.findAllByCarId(car.getId());
-            boolean isOverlapping = existingBookings.stream().anyMatch(b -> 
-                b.getBookingStatus() != BookingStatus.REJECTED && 
-                b.getBookingStatus() != BookingStatus.CANCELLED &&
-                bookACarDto.getFromDate().isBefore(b.getToDate()) && 
-                bookACarDto.getToDate().isAfter(b.getFromDate())
-            );
-
-            if (isOverlapping) return false;
+            if (hasOverlappingBooking(car.getId(), bookACarDto.getFromDate(), bookACarDto.getToDate()))
+                return false;
 
             Booking booking = new Booking();
             booking.setUser(user);
@@ -77,17 +76,54 @@ public class CustomerServiceImpl implements CustomerService {
             long days = java.time.temporal.ChronoUnit.DAYS.between(
                     bookACarDto.getFromDate().toLocalDate(), bookACarDto.getToDate().toLocalDate());
             if (days <= 0) return false;
-            boolean eligibleForIntroDiscount = bookingRepository.findAllByUserId(user.getId()).size() < 5;
-            double totalPrice = car.getPricePerDay().doubleValue() * days;
-            if (eligibleForIntroDiscount) totalPrice = Math.round(totalPrice * 0.7);
+            long priorBookings = bookingRepository.findAllByUserId(user.getId()).size();
+            PricingPolicy.Pricing pricing = PricingPolicy.quote(car.getPricePerDay(), days, priorBookings);
 
             booking.setDays(days);
-            booking.setPrice(totalPrice);
+            booking.setPrice(pricing.totalPrice());
 
             bookingRepository.save(booking);
             return true;
         }
         return false;
+    }
+
+    /**
+     * Prices a booking without creating it. Uses exactly the same rules as
+     * {@link #bookACar(BookACarDto)}, so the customer sees the amount the
+     * booking will actually carry.
+     */
+    @Override
+    public QuoteDto quoteCar(Long userId, QuoteRequestDto quoteRequest) {
+        LocalDateTime from = quoteRequest.getFromDate();
+        LocalDateTime to = quoteRequest.getToDate();
+        if (from == null || to == null || from.toLocalDate().isBefore(LocalDate.now()) || !to.isAfter(from)) {
+            throw new BookingValidationException("Choose a start date from today and an end date after it.");
+        }
+        long days = ChronoUnit.DAYS.between(from.toLocalDate(), to.toLocalDate());
+        if (days <= 0) {
+            throw new BookingValidationException("The booking must be at least one day long.");
+        }
+        Car car = carRepository.findById(quoteRequest.getCarId())
+                .orElseThrow(() -> new BookingValidationException("That car is no longer in the fleet."));
+        if (!car.isAvailable()) {
+            throw new BookingValidationException("That car is not available right now.");
+        }
+        if (hasOverlappingBooking(car.getId(), from, to)) {
+            throw new BookingValidationException("That car is already booked for these dates.");
+        }
+        long priorBookings = userId == null ? 0 : bookingRepository.findAllByUserId(userId).size();
+        PricingPolicy.Pricing pricing = PricingPolicy.quote(car.getPricePerDay(), days, priorBookings);
+        return new QuoteDto(car.getId(), days, car.getPricePerDay(), pricing.basePrice(),
+                pricing.introDiscountApplied() ? PricingPolicy.INTRO_DISCOUNT_PERCENT : 0,
+                pricing.discountAmount(), pricing.totalPrice(), pricing.introDiscountApplied());
+    }
+
+    private boolean hasOverlappingBooking(Long carId, LocalDateTime from, LocalDateTime to) {
+        return bookingRepository.findAllByCarId(carId).stream()
+                .filter(b -> b.getBookingStatus() != BookingStatus.REJECTED
+                        && b.getBookingStatus() != BookingStatus.CANCELLED)
+                .anyMatch(b -> from.isBefore(b.getToDate()) && to.isAfter(b.getFromDate()));
     }
 
     @Override

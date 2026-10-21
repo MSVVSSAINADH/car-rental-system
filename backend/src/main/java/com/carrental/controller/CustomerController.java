@@ -2,7 +2,10 @@ package com.carrental.controller;
 
 import com.carrental.dto.BookACarDto;
 import com.carrental.dto.CarDto;
+import com.carrental.dto.QuoteDto;
+import com.carrental.dto.QuoteRequestDto;
 import com.carrental.dto.UserDto;
+import com.carrental.exception.BookingValidationException;
 import com.carrental.service.CustomerService;
 import com.carrental.repository.UserRepository;
 import com.carrental.repository.BookingRepository;
@@ -40,6 +43,21 @@ public class CustomerController {
         if (success)
             return ResponseEntity.status(HttpStatus.CREATED).build();
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
+    }
+
+    @PostMapping("/car/quote")
+    public ResponseEntity<?> quoteCar(@jakarta.validation.Valid @RequestBody QuoteRequestDto quoteRequest,
+                                      Authentication authentication) {
+        User user = userRepository.findByEmail(authentication.getName()).orElse(null);
+        if (user == null || user.getRole() != UserRole.CUSTOMER) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+        try {
+            QuoteDto quote = customerService.quoteCar(user.getId(), quoteRequest);
+            return ResponseEntity.ok(quote);
+        } catch (BookingValidationException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
     }
 
     @GetMapping("/car/{id}")

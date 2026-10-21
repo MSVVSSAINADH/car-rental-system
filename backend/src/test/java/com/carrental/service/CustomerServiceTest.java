@@ -2,7 +2,10 @@ package com.carrental.service;
 
 import com.carrental.dto.BookACarDto;
 import com.carrental.dto.CarDto;
+import com.carrental.dto.QuoteDto;
+import com.carrental.dto.QuoteRequestDto;
 import com.carrental.dto.UserDto;
+import com.carrental.exception.BookingValidationException;
 import com.carrental.entity.Booking;
 import com.carrental.entity.Car;
 import com.carrental.entity.User;
@@ -139,6 +142,69 @@ class CustomerServiceTest {
         assertFalse(customerService.bookACar(dto));
         verify(carRepository, never()).findByIdForUpdate(any());
         verify(bookingRepository, never()).save(any(Booking.class));
+    }
+
+    @Test
+    void quoteAppliesTheIntroDiscountForAFreshCustomer() {
+        when(carRepository.findById(1L)).thenReturn(Optional.of(sampleCar));
+        when(bookingRepository.findAllByCarId(1L)).thenReturn(Collections.emptyList());
+        when(bookingRepository.findAllByUserId(10L)).thenReturn(Collections.emptyList());
+
+        QuoteDto quote = customerService.quoteCar(10L, quoteRequest(1L, 1, 4));
+
+        assertEquals(3L, quote.getDays());
+        assertEquals(9000.0, quote.getBasePrice());
+        assertEquals(2700.0, quote.getDiscountAmount());
+        assertEquals(6300.0, quote.getTotalPrice());
+        assertEquals(30, quote.getDiscountPercent());
+        assertTrue(quote.isEligibleForDiscount());
+        // A quote must never create a booking.
+        verify(bookingRepository, never()).save(any(Booking.class));
+    }
+
+    @Test
+    void quoteStopsDiscountingOnceTheIntroLimitIsReached() {
+        when(carRepository.findById(1L)).thenReturn(Optional.of(sampleCar));
+        when(bookingRepository.findAllByCarId(1L)).thenReturn(Collections.emptyList());
+        when(bookingRepository.findAllByUserId(10L))
+                .thenReturn(Collections.nCopies(5, new Booking()));
+
+        QuoteDto quote = customerService.quoteCar(10L, quoteRequest(1L, 1, 4));
+
+        assertEquals(9000.0, quote.getBasePrice());
+        assertEquals(0.0, quote.getDiscountAmount());
+        assertEquals(9000.0, quote.getTotalPrice());
+        assertEquals(0, quote.getDiscountPercent());
+        assertFalse(quote.isEligibleForDiscount());
+    }
+
+    @Test
+    void quoteRejectsDatesThatOverlapAnExistingBooking() {
+        Booking existing = new Booking();
+        existing.setFromDate(LocalDateTime.now().plusDays(1));
+        existing.setToDate(LocalDateTime.now().plusDays(5));
+        existing.setBookingStatus(BookingStatus.APPROVED);
+
+        when(carRepository.findById(1L)).thenReturn(Optional.of(sampleCar));
+        when(bookingRepository.findAllByCarId(1L)).thenReturn(List.of(existing));
+
+        assertThrows(BookingValidationException.class,
+                () -> customerService.quoteCar(10L, quoteRequest(1L, 2, 3)));
+    }
+
+    @Test
+    void quoteRejectsAnEndDateBeforeTheStartDate() {
+        assertThrows(BookingValidationException.class,
+                () -> customerService.quoteCar(10L, quoteRequest(1L, 4, 2)));
+        verify(carRepository, never()).findById(any());
+    }
+
+    private static QuoteRequestDto quoteRequest(Long carId, int fromOffsetDays, int toOffsetDays) {
+        QuoteRequestDto request = new QuoteRequestDto();
+        request.setCarId(carId);
+        request.setFromDate(LocalDateTime.now().plusDays(fromOffsetDays));
+        request.setToDate(LocalDateTime.now().plusDays(toOffsetDays));
+        return request;
     }
 
     @Test
