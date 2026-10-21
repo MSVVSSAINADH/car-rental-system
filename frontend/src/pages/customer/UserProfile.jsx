@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
+import { mergeProfileIntoSession, readSession, saveSession } from '../../services/session';
 import './UserProfile.css';
 
 const UserProfile = () => {
@@ -16,7 +17,7 @@ const UserProfile = () => {
 
     useEffect(() => {
         const fetchProfile = async () => {
-            const storedUser = JSON.parse(localStorage.getItem('user'));
+            const storedUser = readSession();
             if (!storedUser || !storedUser.id) {
                 navigate('/login');
                 return;
@@ -76,10 +77,10 @@ const UserProfile = () => {
         try {
             await api.put('/customer/profile', user);
 
-            // Also update local storage user object so other parts of app have latest name immediately
-            // But main source of truth is backend.
-            const storedUser = JSON.parse(localStorage.getItem('user') || '{}');
-            localStorage.setItem('user', JSON.stringify({ ...storedUser, ...user }));
+            // Keep the local session in step with the backend so the rest of the
+            // app sees the new name immediately. The profile response has no JWT,
+            // so the merge must not overwrite the stored token with null.
+            saveSession(mergeProfileIntoSession(readSession(), user));
 
             setMessage('Profile updated successfully!');
             setTimeout(() => setMessage(''), 3000);
