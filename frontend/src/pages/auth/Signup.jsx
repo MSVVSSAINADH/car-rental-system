@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import { useAppConfig } from '../../services/config';
+import { saveSession } from '../../services/session';
 import './Auth.css';
 
 const getPasswordStrength = (password) => {
@@ -42,7 +43,7 @@ const Signup = () => {
         setError('');
         try {
             const res = await api.post('/auth/signup', form);
-            localStorage.setItem('user', JSON.stringify(res.data));
+            saveSession(res.data);
             navigate('/customer/dashboard');
         } catch (err) {
             setError(err.response?.data || 'Signup failed. Please try again.');

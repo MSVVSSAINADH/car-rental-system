@@ -42,9 +42,7 @@ const CarImage = ({ imageUrl, brand = '', model = '', className = '', compact = 
                 />
             </svg>
             {!compact && (
-                <span className="car-image-placeholder__label">
-                    {label || 'Photo coming soon'}
-                </span>
+                <span className="car-image-placeholder__label">Photo coming soon</span>
             )}
         </div>
     );

@@ -1,4 +1,11 @@
+import { useMemo, useSyncExternalStore } from 'react';
+
 export const SESSION_KEY = 'user';
+const SESSION_EVENT = 'carrentalx:session-changed';
+
+function emitSessionChange() {
+    window.dispatchEvent(new Event(SESSION_EVENT));
+}
 
 export function readSession() {
     try {
@@ -10,11 +17,41 @@ export function readSession() {
 
 export function saveSession(user) {
     localStorage.setItem(SESSION_KEY, JSON.stringify(user));
+    emitSessionChange();
 }
 
 export function clearSession() {
     localStorage.removeItem(SESSION_KEY);
+    emitSessionChange();
 }
+
+function subscribeToSession(callback) {
+    window.addEventListener('storage', callback);
+    window.addEventListener(SESSION_EVENT, callback);
+    return () => {
+        window.removeEventListener('storage', callback);
+        window.removeEventListener(SESSION_EVENT, callback);
+    };
+}
+
+function getSessionSnapshot() {
+    return localStorage.getItem(SESSION_KEY);
+}
+
+/** Session state that re-renders the caller when sign-in, profile or sign-out changes it. */
+export function useSession() {
+    const raw = useSyncExternalStore(subscribeToSession, getSessionSnapshot);
+    return useMemo(() => {
+        if (!raw) return null;
+        try {
+            return JSON.parse(raw);
+        } catch {
+            return null;
+        }
+    }, [raw]);
+}
+
+const EDITABLE_PROFILE_FIELDS = ['name', 'profileImage', 'licenseImage'];
 
 /**
  * Merges a profile payload into the stored session.
@@ -25,8 +62,6 @@ export function clearSession() {
  * the profile page can actually change are copied over, and the token is
  * always taken from the existing session.
  */
-const EDITABLE_PROFILE_FIELDS = ['name', 'profileImage', 'licenseImage'];
-
 export function mergeProfileIntoSession(storedUser, profile) {
     const session = { ...(storedUser || {}) };
     const editableFields = {};

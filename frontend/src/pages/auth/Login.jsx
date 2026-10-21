@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../../services/api';
+import { saveSession } from '../../services/session';
 import './Auth.css';
 
 const Login = () => {
@@ -21,7 +22,7 @@ const Login = () => {
         setError('');
         try {
             const res = await api.post('/auth/login', form);
-            localStorage.setItem('user', JSON.stringify(res.data));
+            saveSession(res.data);
             if (res.data.role === 'ADMIN') {
                 navigate('/admin/dashboard');
             } else {

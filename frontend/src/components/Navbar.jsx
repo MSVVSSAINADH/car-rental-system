@@ -1,20 +1,26 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import React, { useEffect, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import api from '../services/api';
+import { clearSession, useSession } from '../services/session';
 import './Navbar.css';
+
+const BellIcon = () => (
+    <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false">
+        <path
+            d="M18 8a6 6 0 1 0-12 0c0 6-2 7-2 7h16s-2-1-2-7M13.7 20a2 2 0 0 1-3.4 0"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+        />
+    </svg>
+);
 
 const Navbar = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    // Read stored user directly during render synchronized with route location
-    const user = React.useMemo(() => {
-        try {
-            return JSON.parse(localStorage.getItem('user'));
-        } catch {
-            return null;
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [location.key]);
+    const user = useSession();
 
     const [scrolled, setScrolled] = useState(false);
     const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -23,8 +29,9 @@ const Navbar = () => {
     const dropdownRef = useRef(null);
 
     useEffect(() => {
-        const onScroll = () => setScrolled(window.scrollY > 20);
-        window.addEventListener('scroll', onScroll);
+        const onScroll = () => setScrolled(window.scrollY > 8);
+        onScroll();
+        window.addEventListener('scroll', onScroll, { passive: true });
         return () => window.removeEventListener('scroll', onScroll);
     }, []);
 
@@ -42,12 +49,35 @@ const Navbar = () => {
                 setDropdownOpen(false);
             }
         };
+        const handleEscape = (e) => {
+            if (e.key === 'Escape') {
+                setDropdownOpen(false);
+                setMobileOpen(false);
+            }
+        };
         document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
+        document.addEventListener('keydown', handleEscape);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('keydown', handleEscape);
+        };
     }, []);
 
+    useEffect(() => {
+        if (!mobileOpen) return undefined;
+        const previous = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => { document.body.style.overflow = previous; };
+    }, [mobileOpen]);
+
+    const closeMenus = () => {
+        setDropdownOpen(false);
+        setMobileOpen(false);
+    };
+
     const handleLogout = () => {
-        localStorage.removeItem('user');
+        clearSession();
+        closeMenus();
         navigate('/login');
     };
 
@@ -58,36 +88,39 @@ const Navbar = () => {
         else navigate('/');
     };
 
+    const isActive = (path) => location.pathname === path;
+    const linkClass = (path) => `nav-link${isActive(path) ? ' is-active' : ''}`;
+
     return (
-        <nav className={`navbar ${scrolled ? 'scrolled' : ''}`}>
-            <div className="container navbar-container">
+        <header className={`navbar ${scrolled ? 'scrolled' : ''}`}>
+            <nav className="container navbar-container" aria-label="Main">
                 <a href="/" onClick={handleLogoClick} className="navbar-logo">
+                    <span className="logo-mark" aria-hidden="true">C</span>
                     CarRental<span className="logo-accent">X</span>
                 </a>
 
-                <div className={`navbar-links ${mobileOpen ? 'mobile-open' : ''}`}>
+                <div id="primary-navigation" className={`navbar-links ${mobileOpen ? 'mobile-open' : ''}`}>
                     {user ? (
                         <>
                             {user.role === 'ADMIN' ? (
                                 <>
-                                    <Link to="/admin/dashboard" className="nav-link" onClick={() => setMobileOpen(false)}>Fleet</Link>
-                                    <Link to="/admin/bookings" className="nav-link" onClick={() => setMobileOpen(false)}>Bookings</Link>
-                                    <Link to="/admin/users" className="nav-link" onClick={() => setMobileOpen(false)}>Users</Link>
-                                    <Link to="/admin/add-car" className="nav-link" onClick={() => setMobileOpen(false)}>Add Car</Link>
+                                    <Link to="/admin/dashboard" className={linkClass('/admin/dashboard')} onClick={closeMenus}>Fleet</Link>
+                                    <Link to="/admin/bookings" className={linkClass('/admin/bookings')} onClick={closeMenus}>Bookings</Link>
+                                    <Link to="/admin/users" className={linkClass('/admin/users')} onClick={closeMenus}>Users</Link>
+                                    <Link to="/admin/add-car" className={linkClass('/admin/add-car')} onClick={closeMenus}>Add car</Link>
                                 </>
                             ) : (
                                 <>
-                                    <Link to="/customer/dashboard" className="nav-link" onClick={() => setMobileOpen(false)}>Browse Cars</Link>
-                                    <Link to="/customer/bookings" className="nav-link" onClick={() => setMobileOpen(false)}>My Bookings</Link>
+                                    <Link to="/customer/dashboard" className={linkClass('/customer/dashboard')} onClick={closeMenus}>Browse cars</Link>
+                                    <Link to="/customer/bookings" className={linkClass('/customer/bookings')} onClick={closeMenus}>My bookings</Link>
                                     <Link
                                         to="/customer/notifications"
-                                        className="nav-link notif-link"
-                                        onClick={() => setMobileOpen(false)}
+                                        className={`nav-link notif-link${isActive('/customer/notifications') ? ' is-active' : ''}`}
+                                        onClick={closeMenus}
+                                        aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : 'Notifications'}
                                     >
-                                        🔔
-                                        {unreadCount > 0 && (
-                                            <span className="notif-badge">{unreadCount}</span>
-                                        )}
+                                        <BellIcon />
+                                        {unreadCount > 0 && <span className="notif-badge">{unreadCount > 9 ? '9+' : unreadCount}</span>}
                                     </Link>
                                 </>
                             )}
@@ -97,9 +130,10 @@ const Navbar = () => {
                                     className="avatar-btn"
                                     onClick={() => setDropdownOpen(!dropdownOpen)}
                                     aria-label="Profile menu"
+                                    aria-expanded={dropdownOpen}
                                 >
                                     {user.profileImage ? (
-                                        <img src={user.profileImage} alt={user.name} className="avatar-img" />
+                                        <img src={user.profileImage} alt="" className="avatar-img" />
                                     ) : (
                                         <span className="avatar-initial">{user.name?.charAt(0).toUpperCase() || 'U'}</span>
                                     )}
@@ -109,21 +143,18 @@ const Navbar = () => {
                                     <div className="profile-dropdown scale-in">
                                         <div className="dropdown-header">
                                             <p className="dropdown-name">{user.name}</p>
+                                            <p className="dropdown-email">{user.email}</p>
                                             <span className={`badge ${user.role === 'ADMIN' ? 'badge-primary' : 'badge-success'}`}>
-                                                {user.role}
+                                                {user.role === 'ADMIN' ? 'Administrator' : 'Customer'}
                                             </span>
                                         </div>
                                         {user.role !== 'ADMIN' && (
-                                            <Link
-                                                to="/customer/profile"
-                                                className="dropdown-item"
-                                                onClick={() => setDropdownOpen(false)}
-                                            >
-                                                👤 My Profile
+                                            <Link to="/customer/profile" className="dropdown-item" onClick={closeMenus}>
+                                                My profile
                                             </Link>
                                         )}
                                         <button className="dropdown-item danger" onClick={handleLogout}>
-                                            🚪 Sign Out
+                                            Sign out
                                         </button>
                                     </div>
                                 )}
@@ -131,24 +162,29 @@ const Navbar = () => {
                         </>
                     ) : (
                         <>
-                            <Link to="/#how-it-works" className="nav-link">How it Works</Link>
-                            <Link to="/login" className="nav-link">Login</Link>
-                            <Link to="/signup" className="btn btn-primary btn-sm">Get Started</Link>
+                            <Link to="/cars" className={linkClass('/cars')} onClick={closeMenus}>Cars</Link>
+                            <Link to="/#how-it-works" className="nav-link" onClick={closeMenus}>How it works</Link>
+                            <Link to="/login" className={linkClass('/login')} onClick={closeMenus}>Login</Link>
+                            <Link to="/signup" className="btn btn-primary btn-sm navbar-cta" onClick={closeMenus}>Get started</Link>
                         </>
                     )}
                 </div>
 
                 <button
-                    className="hamburger"
+                    className={`hamburger${mobileOpen ? ' is-open' : ''}`}
                     onClick={() => setMobileOpen(!mobileOpen)}
-                    aria-label="Toggle menu"
+                    aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
+                    aria-expanded={mobileOpen}
+                    aria-controls="primary-navigation"
                 >
-                    <span className={mobileOpen ? 'bar open' : 'bar'}></span>
-                    <span className={mobileOpen ? 'bar open' : 'bar'}></span>
-                    <span className={mobileOpen ? 'bar open' : 'bar'}></span>
+                    <span className="bar"></span>
+                    <span className="bar"></span>
+                    <span className="bar"></span>
                 </button>
-            </div>
-        </nav>
+            </nav>
+
+            {mobileOpen && <button className="nav-backdrop" aria-label="Close menu" onClick={closeMenus} />}
+        </header>
     );
 };
 

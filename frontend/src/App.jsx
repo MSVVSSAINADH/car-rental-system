@@ -1,6 +1,8 @@
 import { Route, Routes, BrowserRouter } from 'react-router-dom';
 import { ConfigProvider } from 'antd';
 import Navbar from './components/Navbar';
+import Footer from './components/Footer';
+import ScrollToTop from './components/ScrollToTop';
 import ProtectedRoute from './components/ProtectedRoute';
 import Login from './pages/auth/Login';
 import Signup from './pages/auth/Signup';
@@ -14,7 +16,7 @@ import AdminBookings from './pages/admin/AdminBookings';
 import Payment from './pages/customer/Payment';
 import UserProfile from './pages/customer/UserProfile';
 import Home from './pages/Home';
-import Footer from './components/Footer';
+import Cars from './pages/Cars';
 import ManageUsers from './pages/admin/ManageUsers';
 import Notifications from './pages/customer/Notifications';
 
@@ -25,17 +27,25 @@ function App() {
         theme={{
           token: {
             colorPrimary: '#4f46e5',
+            colorInfo: '#4f46e5',
             colorBgContainer: '#ffffff',
+            colorBgLayout: '#f6f7fb',
+            colorText: '#0f172a',
+            colorTextSecondary: '#64748b',
+            colorBorder: '#e2e8f0',
             borderRadius: 10,
-            fontFamily: 'Inter, sans-serif',
+            fontFamily: "'Inter', sans-serif",
           },
         }}
       >
+        <ScrollToTop />
+        <a className="skip-link" href="#main-content">Skip to content</a>
         <Navbar />
-        <div className="main-content">
+        <main id="main-content" className="main-content">
           <Routes>
             {/* Public */}
             <Route path="/" element={<Home />} />
+            <Route path="/cars" element={<Cars />} />
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
 
@@ -54,7 +64,7 @@ function App() {
             <Route path="/customer/notifications" element={<ProtectedRoute role="CUSTOMER"><Notifications /></ProtectedRoute>} />
             <Route path="/payment" element={<ProtectedRoute role="CUSTOMER"><Payment /></ProtectedRoute>} />
           </Routes>
-        </div>
+        </main>
         <Footer />
       </ConfigProvider>
     </BrowserRouter>
