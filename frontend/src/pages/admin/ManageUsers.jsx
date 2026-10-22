@@ -1,132 +1,199 @@
-import React, { useEffect, useState } from 'react';
-import api from '../../services/api';
+import { useEffect, useMemo, useState } from 'react'
+import { toast } from 'sonner'
+import api from '../../services/api'
+import { useSession } from '../../services/session'
+import ConfirmDialog from '../../components/ConfirmDialog'
+import { inputClass } from '../../components/FormField'
+import { buttonStyles } from '../../lib/buttonStyles'
+import { cn } from '../../lib/utils'
 
 const ManageUsers = () => {
-    const [users, setUsers] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [search, setSearch] = useState('');
-    const [updatingUserId, setUpdatingUserId] = useState(null);
-    const currentUserId = (() => {
-        try { return JSON.parse(localStorage.getItem('user') || '{}').id; }
-        catch { return null; }
-    })();
+  const session = useSession()
+  const currentUserId = session?.id
 
-    useEffect(() => {
-        api.get('/admin/users')
-            .then(res => setUsers(res.data))
-            .catch(console.error)
-            .finally(() => setLoading(false));
-    }, []);
+  const [users, setUsers] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
+  const [attempt, setAttempt] = useState(0)
+  const [search, setSearch] = useState('')
+  const [target, setTarget] = useState(null)
+  const [busy, setBusy] = useState(false)
 
-    const toggleUserBlock = async (user) => {
-        setUpdatingUserId(user.id);
-        try {
-            await api.put(`/admin/user/${user.id}/block`);
-            setUsers(current => current.map(item =>
-                item.id === user.id ? { ...item, blocked: !item.blocked } : item
-            ));
-        } catch (error) {
-            console.error('Unable to update user access:', error);
-        } finally {
-            setUpdatingUserId(null);
-        }
-    };
+  useEffect(() => {
+    let active = true
+    api
+      .get('/admin/users')
+      .then((res) => {
+        if (active) setUsers(Array.isArray(res.data) ? res.data : [])
+      })
+      .catch(() => {
+        if (active) setError(true)
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [attempt])
 
-    const filtered = users.filter(u =>
-        u.name?.toLowerCase().includes(search.toLowerCase()) ||
-        u.email?.toLowerCase().includes(search.toLowerCase())
-    );
+  const retry = () => {
+    setError(false)
+    setLoading(true)
+    setAttempt((n) => n + 1)
+  }
 
-    return (
-        <div className="container fade-in" style={{ paddingTop: '2rem', paddingBottom: '4rem' }}>
-            <div className="dashboard-header">
-                <div>
-                    <h1 style={{ fontFamily: 'Poppins,sans-serif', fontWeight: 800, margin: 0 }}>Manage Users</h1>
-                    <p style={{ color: 'var(--text-muted)', margin: '4px 0 0' }}>All registered users on the platform</p>
-                </div>
-                <span className="badge badge-primary" style={{ fontSize: '0.9rem', padding: '8px 16px' }}>
-                    {users.length} total users
-                </span>
-            </div>
+  const filtered = useMemo(() => {
+    const term = search.trim().toLowerCase()
+    if (!term) return users
+    return users.filter(
+      (u) => u.name?.toLowerCase().includes(term) || u.email?.toLowerCase().includes(term),
+    )
+  }, [users, search])
 
-            <div style={{ marginBottom: '1.5rem', maxWidth: 360 }}>
-                <input
-                    type="text"
-                    className="form-input"
-                    placeholder="🔍 Search by name or email..."
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                />
-            </div>
+  const confirmToggle = async () => {
+    setBusy(true)
+    try {
+      await api.put(`/admin/user/${target.id}/block`)
+      setUsers((prev) => prev.map((u) => (u.id === target.id ? { ...u, blocked: !u.blocked } : u)))
+      toast.success(target.blocked ? 'User unblocked.' : 'User blocked.')
+      setTarget(null)
+    } catch {
+      toast.error('Could not update this user. Try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
 
-            <div className="card" style={{ overflowX: 'auto', padding: 0 }}>
-                {loading ? (
-                    <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>Loading users...</div>
-                ) : (
-                    <table className="table">
-                        <thead>
-                            <tr>
-                                <th>#</th>
-                                <th>User</th>
-                                <th>Email</th>
-                                <th>Role</th>
-                                <th>Profile</th>
-                                <th>Access</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {filtered.map((u, idx) => (
-                                <tr key={u.id}>
-                                    <td style={{ color: 'var(--text-muted)', fontWeight: 600 }}>{idx + 1}</td>
-                                    <td>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                            <div style={{
-                                                width: 40, height: 40, borderRadius: '50%',
-                                                background: u.profileImage ? 'transparent' : '#4f46e5',
-                                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                color: 'white', fontWeight: 700, fontSize: '1rem', overflow: 'hidden',
-                                                flexShrink: 0
-                                            }}>
-                                                {u.profileImage
-                                                    ? <img src={u.profileImage} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                                    : u.name?.charAt(0).toUpperCase()
-                                                }
-                                            </div>
-                                            <span style={{ fontWeight: 600 }}>{u.name}</span>
-                                        </div>
-                                    </td>
-                                    <td style={{ color: 'var(--text-muted)' }}>{u.email}</td>
-                                    <td>
-                                        <span className={`badge ${u.role === 'ADMIN' ? 'badge-primary' : 'badge-success'}`}>
-                                            {u.role}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        {u.profileImage
-                                            ? <span className="badge badge-success">✓ Uploaded</span>
-                                            : <span className="badge badge-muted">No photo</span>
-                                        }
-                                    </td>
-                                    <td>
-                                        <button
-                                            className={`btn btn-sm ${u.blocked ? 'btn-success' : 'btn-danger'}`}
-                                            disabled={updatingUserId === u.id || u.role === 'ADMIN' || u.id === currentUserId}
-                                            onClick={() => toggleUserBlock(u)}
-                                        >
-                                            {updatingUserId === u.id ? 'Updating…' : u.role === 'ADMIN' ? 'Admin' : u.blocked ? 'Unblock' : 'Block'}
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
-                            {filtered.length === 0 && (
-                                <tr><td colSpan="6" style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>No users found</td></tr>
-                            )}
-                        </tbody>
-                    </table>
-                )}
-            </div>
+  return (
+    <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-bold">Users</h1>
+          <p className="mt-1 text-body">Everyone registered on CarRentalX.</p>
         </div>
-    );
-};
+        {!loading && !error && (
+          <p className="text-sm text-body">
+            {users.length} {users.length === 1 ? 'user' : 'users'}
+          </p>
+        )}
+      </div>
 
-export default ManageUsers;
+      {!loading && !error && users.length > 0 && (
+        <div className="mt-6 max-w-sm">
+          <label htmlFor="user-search" className="mb-1 block text-sm font-medium text-ink">
+            Search by name or email
+          </label>
+          <input
+            id="user-search"
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className={cn(inputClass, 'border-line')}
+          />
+        </div>
+      )}
+
+      <div className="mt-6">
+        {loading ? (
+          <div role="status" className="h-64 animate-pulse rounded-card bg-line">
+            <span className="sr-only">Loading users</span>
+          </div>
+        ) : error ? (
+          <div className="rounded-card border border-line bg-surface p-8 text-center">
+            <p className="font-semibold text-ink">Users could not be loaded.</p>
+            <p className="mt-1 text-sm text-body">Check that the backend is running and try again.</p>
+            <button type="button" onClick={retry} className={buttonStyles({ className: 'mt-4' })}>
+              Try again
+            </button>
+          </div>
+        ) : filtered.length === 0 ? (
+          <div className="rounded-card border border-line bg-surface p-8 text-center">
+            <p className="font-semibold text-ink">No users found.</p>
+            {search && <p className="mt-1 text-sm text-body">Try a different name or email.</p>}
+          </div>
+        ) : (
+          <div className="overflow-x-auto rounded-card border border-line bg-surface shadow-card">
+            <table className="w-full min-w-[40rem] text-left text-sm">
+              <thead className="border-b border-line bg-page text-xs uppercase tracking-wide text-body">
+                <tr>
+                  <th scope="col" className="px-4 py-3 font-semibold">User</th>
+                  <th scope="col" className="px-4 py-3 font-semibold">Role</th>
+                  <th scope="col" className="px-4 py-3 font-semibold">Access</th>
+                  <th scope="col" className="px-4 py-3 font-semibold">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {filtered.map((u) => {
+                  const locked = u.role === 'ADMIN' || u.id === currentUserId
+                  return (
+                    <tr key={u.id}>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-control bg-primary-soft text-sm font-semibold text-primary">
+                            {u.profileImage ? (
+                              <img src={u.profileImage} alt="" className="h-full w-full object-cover" />
+                            ) : (
+                              u.name?.charAt(0).toUpperCase() || 'U'
+                            )}
+                          </div>
+                          <div>
+                            <p className="font-semibold text-ink">{u.name}</p>
+                            <p className="text-body">{u.email}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-body">{u.role === 'ADMIN' ? 'Administrator' : 'Customer'}</td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={cn(
+                            'inline-block rounded-badge px-2 py-0.5 text-xs font-semibold',
+                            u.blocked ? 'bg-danger-soft text-red-700' : 'bg-success-soft text-success',
+                          )}
+                        >
+                          {u.blocked ? 'Blocked' : 'Active'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        {locked ? (
+                          <span className="text-body">{u.id === currentUserId ? 'This is you' : 'Not allowed'}</span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setTarget(u)}
+                            className={buttonStyles({ variant: 'secondary', size: 'sm' })}
+                          >
+                            {u.blocked ? 'Unblock' : 'Block'}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <ConfirmDialog
+        open={Boolean(target)}
+        title={target?.blocked ? 'Unblock this user?' : 'Block this user?'}
+        description={
+          target
+            ? target.blocked
+              ? `${target.name} will be able to sign in and send booking requests again.`
+              : `${target.name} will no longer be able to sign in or send booking requests.`
+            : ''
+        }
+        confirmLabel={target?.blocked ? 'Unblock' : 'Block'}
+        variant={target?.blocked ? 'primary' : 'danger'}
+        busy={busy}
+        onConfirm={confirmToggle}
+        onCancel={() => setTarget(null)}
+      />
+    </div>
+  )
+}
+
+export default ManageUsers

@@ -1,263 +1,230 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import api from '../../services/api';
-import CarImage from '../../components/CarImage';
+import { useCallback, useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { toast } from 'sonner'
+import api from '../../services/api'
+import ConfirmDialog from '../../components/ConfirmDialog'
+import { buttonStyles } from '../../lib/buttonStyles'
+import { cn } from '../../lib/utils'
+import { formatINR } from '../../lib/format'
 
-const StatCard = ({ icon, label, value, bg, color }) => (
-    <div className="stat-card fade-in-up">
-        <div className="stat-icon" style={{ background: bg }}>
-            <span>{icon}</span>
-        </div>
-        <p className="stat-value" style={{ color }}>{value}</p>
-        <p className="stat-label">{label}</p>
-    </div>
-);
+function Stat({ label, value, to }) {
+  const body = (
+    <>
+      <p className="text-3xl font-bold text-ink">{value ?? 0}</p>
+      <p className="mt-1 text-sm text-body">{label}</p>
+    </>
+  )
+  const base = 'rounded-card border border-line bg-surface p-5 shadow-card'
+  return to ? (
+    <Link to={to} className={cn(base, 'block hover:border-primary')}>
+      {body}
+    </Link>
+  ) : (
+    <div className={base}>{body}</div>
+  )
+}
 
 const AdminDashboard = () => {
-    const [cars, setCars] = useState([]);
-    const [bookings, setBookings] = useState([]);
-    const [stats, setStats] = useState(null);
-    const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState('fleet');
-    const navigate = useNavigate();
+  const [cars, setCars] = useState([])
+  const [stats, setStats] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
+  const [togglingId, setTogglingId] = useState(null)
+  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [deleting, setDeleting] = useState(false)
 
-    const fetchData = useCallback(async () => {
-        setLoading(true);
-        try {
-            const [carRes, bookingRes, statsRes] = await Promise.all([
-                api.get('/admin/cars'),
-                api.get('/admin/car/bookings'),
-                api.get('/admin/stats')
-            ]);
-            setCars(carRes.data);
-            setBookings(bookingRes.data.sort((a, b) => b.id - a.id));
-            setStats(statsRes.data);
-        } catch (err) {
-            console.error('Error fetching admin data:', err);
-        } finally {
-            setLoading(false);
-        }
-    }, []);
+  const fetchData = useCallback(async () => {
+    try {
+      const [carRes, statsRes] = await Promise.all([api.get('/admin/cars'), api.get('/admin/stats')])
+      setCars(Array.isArray(carRes.data) ? carRes.data : [])
+      setStats(statsRes.data)
+      setError(false)
+    } catch {
+      setError(true)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
-    useEffect(() => {
-        fetchData();
-    }, [fetchData]);
+  useEffect(() => {
+    fetchData()
+  }, [fetchData])
 
-    const handleDelete = async (id) => {
-        if (!window.confirm('Delete this car?')) return;
-        try {
-            await api.delete(`/admin/car/${id}`);
-            fetchData();
-        } catch (err) { console.error(err); }
-    };
+  const retry = () => {
+    setError(false)
+    setLoading(true)
+    fetchData()
+  }
 
-    const toggleAvailability = async (car) => {
-        try {
-            await api.put(`/admin/car/${car.id}`, { ...car, available: !car.available });
-            fetchData();
-        } catch (err) { console.error(err); }
-    };
+  const toggleAvailability = async (car) => {
+    setTogglingId(car.id)
+    try {
+      await api.put(`/admin/car/${car.id}`, { ...car, available: !car.available })
+      setCars((prev) => prev.map((c) => (c.id === car.id ? { ...c, available: !car.available } : c)))
+      toast.success(`${car.brand} ${car.model} is now ${car.available ? 'unavailable' : 'available'}.`)
+    } catch {
+      toast.error('Could not update this car. Try again.')
+    } finally {
+      setTogglingId(null)
+    }
+  }
 
-    const handleBookingStatus = async (bookingId, status) => {
-        const apiStatus = status === 'Approved' ? 'Approve' : 'Reject';
-        try {
-            await api.put(`/admin/car/booking/${bookingId}/${apiStatus}`);
-            fetchData();
-        } catch (err) { console.error(err); }
-    };
+  const confirmDelete = async () => {
+    setDeleting(true)
+    try {
+      await api.delete(`/admin/car/${deleteTarget.id}`)
+      toast.success('Car deleted.')
+      setDeleteTarget(null)
+      fetchData()
+    } catch {
+      toast.error('This car could not be deleted. If it has bookings, mark it unavailable instead.')
+    } finally {
+      setDeleting(false)
+    }
+  }
 
-    const formatCurrency = (val) => `₹${Number(val || 0).toLocaleString('en-IN')}`;
+  const availableCount = cars.filter((c) => c.available).length
 
-    const getStatusBadge = (status) => {
-        const map = {
-            'APPROVED': 'badge badge-success',
-            'REJECTED': 'badge badge-danger',
-            'PENDING': 'badge badge-warning',
-        };
-        return map[status] || 'badge badge-muted';
-    };
-
-    return (
-        <div className="container fade-in" style={{ paddingTop: '2rem', paddingBottom: '4rem' }}>
-            {/* Header */}
-            <div className="dashboard-header">
-                <div>
-                    <h1 style={{ fontFamily: 'Poppins,sans-serif', fontWeight: 800, margin: 0 }}>Admin Dashboard</h1>
-                    <p style={{ color: 'var(--text-muted)', margin: '4px 0 0' }}>Manage your fleet and bookings</p>
-                </div>
-                <button className="btn btn-primary" onClick={() => navigate('/admin/add-car')}>+ Add New Car</button>
-            </div>
-
-            {/* KPI Stat Cards */}
-            {stats && (
-                <div className="stat-cards-grid">
-                    <StatCard icon="🚗" label="Total Cars" value={stats.totalCars} bg="rgba(79,70,229,.1)" color="#4f46e5" />
-                    <StatCard icon="📋" label="Total Bookings" value={stats.totalBookings} bg="rgba(14,165,233,.1)" color="#0ea5e9" />
-                    <StatCard icon="💰" label="Revenue" value={formatCurrency(stats.totalRevenue)} bg="rgba(16,185,129,.1)" color="#10b981" />
-                    <StatCard icon="⏳" label="Pending" value={stats.pendingBookings} bg="rgba(245,158,11,.1)" color="#f59e0b" />
-                    <StatCard icon="✅" label="Approved" value={stats.approvedBookings} bg="rgba(16,185,129,.08)" color="#10b981" />
-                    <StatCard icon="👥" label="Users" value={stats.totalUsers} bg="rgba(239,68,68,.1)" color="#ef4444" />
-                </div>
-            )}
-
-            {/* Tabs */}
-            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '2rem', borderBottom: '1px solid var(--border)', paddingBottom: '0' }}>
-                {['fleet', 'bookings'].map(tab => (
-                    <button
-                        key={tab}
-                        onClick={() => setActiveTab(tab)}
-                        style={{
-                            padding: '10px 24px',
-                            background: 'none',
-                            border: 'none',
-                            borderBottom: activeTab === tab ? '3px solid var(--primary)' : '3px solid transparent',
-                            color: activeTab === tab ? 'var(--primary)' : 'var(--text-muted)',
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            transition: 'all 0.2s',
-                            fontSize: '0.95rem',
-                            textTransform: 'capitalize'
-                        }}
-                    >
-                        {tab === 'fleet' ? '🚘 Fleet' : '📋 Bookings'}
-                    </button>
-                ))}
-            </div>
-
-            {/* Fleet Tab */}
-            {activeTab === 'fleet' && (
-                <section>
-                    {loading ? (
-                        <div className="cars-grid">
-                            {[...Array(6)].map((_, i) => (
-                                <div key={i} className="card skeleton-card">
-                                    <div className="skeleton skeleton-img" />
-                                    <div style={{ padding: '1rem' }}>
-                                        <div className="skeleton skeleton-text" style={{ marginBottom: 8 }} />
-                                        <div className="skeleton skeleton-text w-75" />
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="cars-grid">
-                            {cars.map(car => (
-                                <div key={car.id} className="car-card" style={{ opacity: !car.available ? 0.7 : 1 }}>
-                                    <div className="car-image">
-                                        <CarImage
-                                            imageUrl={car.imageUrl}
-                                            brand={car.brand}
-                                            model={car.model}
-                                            className="car-image-fill"
-                                        />
-                                        <div style={{ position: 'absolute', top: 10, left: 10, display: 'flex', gap: 6 }}>
-                                            {car.category && <span className="badge badge-primary">{car.category}</span>}
-                                            {!car.available && <span className="badge badge-danger">Unavailable</span>}
-                                        </div>
-                                    </div>
-                                    <div className="car-details">
-                                        <h3 style={{ margin: '0 0 4px', fontWeight: 700 }}>{car.brand} {car.model}</h3>
-                                        <div className="car-info">
-                                            <span>{car.year}</span>
-                                            <span>{car.transmission}</span>
-                                            <span>{car.fuelType}</span>
-                                            {car.seats > 0 && <span>{car.seats} seats</span>}
-                                        </div>
-                                        <p className="car-price" style={{ margin: '0.5rem 0 1rem' }}>₹{car.pricePerDay}/day</p>
-                                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                                            <button
-                                                className={`btn btn-sm ${car.available ? '' : 'btn-success'}`}
-                                                style={{ gridColumn: '1/-1', background: car.available ? '#f59e0b' : '#10b981', color: 'white' }}
-                                                onClick={() => toggleAvailability(car)}
-                                            >
-                                                {car.available ? '⏸ Make Unavailable' : '▶ Make Available'}
-                                            </button>
-                                            <button className="btn btn-primary btn-sm" onClick={() => navigate(`/admin/car/${car.id}`)}>✏️ Edit</button>
-                                            <button className="btn btn-danger btn-sm" onClick={() => handleDelete(car.id)}>🗑 Delete</button>
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                            {cars.length === 0 && (
-                                <div className="empty-state" style={{ gridColumn: '1/-1' }}>
-                                    <div className="empty-state-icon">🚗</div>
-                                    <h3>No cars yet</h3>
-                                    <p>Add your first car to the fleet</p>
-                                    <button className="btn btn-primary" onClick={() => navigate('/admin/add-car')}>+ Add Car</button>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                </section>
-            )}
-
-            {/* Bookings Tab */}
-            {activeTab === 'bookings' && (
-                <section>
-                    <div className="card" style={{ overflowX: 'auto', padding: 0 }}>
-                        <table className="table">
-                            <thead>
-                                <tr>
-                                    <th>#ID</th>
-                                    <th>Car</th>
-                                    <th>Customer</th>
-                                    <th>Dates</th>
-                                    <th>Total</th>
-                                    <th>Status</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {bookings.map(b => (
-                                    <tr key={b.id}>
-                                        <td style={{ fontWeight: 600, color: 'var(--primary)' }}>#{String(b.id).slice(-5)}</td>
-                                        <td>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                                <CarImage
-                                                    imageUrl={b.carImage}
-                                                    brand={b.carBrand}
-                                                    model={b.carModel}
-                                                    compact
-                                                    className="car-image-thumb"
-                                                />
-                                                <span>{b.carBrand} {b.carModel}</span>
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <div>
-                                                <div style={{ fontWeight: 600 }}>{b.username}</div>
-                                                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{b.email}</div>
-                                            </div>
-                                        </td>
-                                        <td style={{ fontSize: '0.85rem' }}>
-                                            {b.fromDate} <br /><span style={{ color: 'var(--text-muted)' }}>to</span><br /> {b.toDate}
-                                        </td>
-                                        <td style={{ fontWeight: 700 }}>₹{b.price?.toLocaleString('en-IN')}</td>
-                                        <td>
-                                            <span className={`badge ${getStatusBadge(b.bookingStatus)}`}>
-                                                {b.bookingStatus}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            {b.bookingStatus === 'PENDING' ? (
-                                                <div style={{ display: 'flex', gap: 6 }}>
-                                                    <button className="btn btn-sm btn-success" onClick={() => handleBookingStatus(b.id, 'Approved')}>✓</button>
-                                                    <button className="btn btn-sm btn-danger" onClick={() => handleBookingStatus(b.id, 'Rejected')}>✕</button>
-                                                </div>
-                                            ) : <span style={{ color: 'var(--text-light)' }}>—</span>}
-                                        </td>
-                                    </tr>
-                                ))}
-                                {bookings.length === 0 && (
-                                    <tr><td colSpan="7" className="empty-state">No bookings yet</td></tr>
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </section>
-            )}
+  return (
+    <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold">Fleet</h1>
+          <p className="mt-1 text-body">Manage the cars customers can request.</p>
         </div>
-    );
-};
+        <Link to="/admin/add-car" className={buttonStyles()}>
+          Add car
+        </Link>
+      </div>
 
-export default AdminDashboard;
+      {loading ? (
+        <div role="status" className="mt-8">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="h-24 animate-pulse rounded-card bg-line" />
+            ))}
+          </div>
+          <div className="mt-8 h-64 animate-pulse rounded-card bg-line" />
+          <span className="sr-only">Loading fleet</span>
+        </div>
+      ) : error ? (
+        <div className="mt-8 rounded-card border border-line bg-surface p-8 text-center">
+          <p className="font-semibold text-ink">The fleet could not be loaded.</p>
+          <p className="mt-1 text-sm text-body">Check that the backend is running and try again.</p>
+          <button type="button" onClick={retry} className={buttonStyles({ className: 'mt-4' })}>
+            Try again
+          </button>
+        </div>
+      ) : (
+        <>
+          {stats && (
+            <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <Stat label="Cars in fleet" value={stats.totalCars} />
+              <Stat label="Available now" value={availableCount} />
+              <Stat
+                label={stats.pendingBookings > 0 ? 'Pending requests, review now' : 'Pending requests'}
+                value={stats.pendingBookings}
+                to={stats.pendingBookings > 0 ? '/admin/bookings' : undefined}
+              />
+              <Stat label="Approved bookings" value={stats.approvedBookings} />
+              <Stat label="Total bookings" value={stats.totalBookings} />
+              <Stat label="Registered users" value={stats.totalUsers} />
+            </div>
+          )}
+
+          <div className="mt-8 overflow-x-auto rounded-card border border-line bg-surface shadow-card">
+            {cars.length === 0 ? (
+              <div className="p-8 text-center">
+                <p className="font-semibold text-ink">No cars yet.</p>
+                <p className="mt-1 text-sm text-body">Add the first car to the fleet.</p>
+                <Link to="/admin/add-car" className={buttonStyles({ className: 'mt-4' })}>
+                  Add car
+                </Link>
+              </div>
+            ) : (
+              <table className="w-full min-w-[40rem] text-left text-sm">
+                <thead className="border-b border-line bg-page text-xs uppercase tracking-wide text-body">
+                  <tr>
+                    <th scope="col" className="px-4 py-3 font-semibold">Car</th>
+                    <th scope="col" className="px-4 py-3 font-semibold">Category</th>
+                    <th scope="col" className="px-4 py-3 font-semibold">Price per day</th>
+                    <th scope="col" className="px-4 py-3 font-semibold">Status</th>
+                    <th scope="col" className="px-4 py-3 font-semibold">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {cars.map((car) => (
+                    <tr key={car.id}>
+                      <td className="px-4 py-3">
+                        <p className="font-semibold text-ink">
+                          {car.brand} {car.model}
+                        </p>
+                        <p className="text-body">
+                          {[car.year, car.transmission, car.fuelType].filter(Boolean).join(', ')}
+                        </p>
+                      </td>
+                      <td className="px-4 py-3 text-body">{car.category || 'Not set'}</td>
+                      <td className="px-4 py-3 font-medium text-ink">{formatINR(car.pricePerDay)}</td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={cn(
+                            'inline-block rounded-badge px-2 py-0.5 text-xs font-semibold',
+                            car.available ? 'bg-success-soft text-success' : 'bg-danger-soft text-red-700',
+                          )}
+                        >
+                          {car.available ? 'Available' : 'Unavailable'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex flex-wrap gap-2">
+                          <Link
+                            to={`/admin/car/${car.id}`}
+                            className={buttonStyles({ variant: 'secondary', size: 'sm' })}
+                          >
+                            Edit
+                          </Link>
+                          <button
+                            type="button"
+                            onClick={() => toggleAvailability(car)}
+                            disabled={togglingId === car.id}
+                            className={buttonStyles({ variant: 'secondary', size: 'sm' })}
+                          >
+                            {car.available ? 'Make unavailable' : 'Make available'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setDeleteTarget(car)}
+                            className={buttonStyles({ variant: 'ghost', size: 'sm', className: 'text-danger' })}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </>
+      )}
+
+      <ConfirmDialog
+        open={Boolean(deleteTarget)}
+        title="Delete this car?"
+        description={
+          deleteTarget
+            ? `${deleteTarget.brand} ${deleteTarget.model} will be removed from the fleet. If it has bookings, mark it unavailable instead.`
+            : ''
+        }
+        confirmLabel="Delete car"
+        variant="danger"
+        busy={deleting}
+        onConfirm={confirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
+    </div>
+  )
+}
+
+export default AdminDashboard

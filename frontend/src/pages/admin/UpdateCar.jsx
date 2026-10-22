@@ -1,120 +1,89 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import api from '../../services/api';
+import { useEffect, useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { toast } from 'sonner'
+import api from '../../services/api'
+import CarForm from '../../components/CarForm'
+import { buttonStyles } from '../../lib/buttonStyles'
+import { errorMessage } from '../../lib/errors'
 
 const UpdateCar = () => {
-    const { id } = useParams();
-    const navigate = useNavigate();
-    const [formData, setFormData] = useState({
-        brand: '',
-        model: '',
-        color: '',
-        year: '',
-        transmission: 'Automatic',
-        fuelType: 'Petrol',
-        pricePerDay: '',
-        description: '',
-        imageUrl: '',
-        seats: '',
-        category: 'Budget'
-    });
+  const { id } = useParams()
+  const navigate = useNavigate()
+  const [car, setCar] = useState(null)
+  const [loadError, setLoadError] = useState(false)
+  const [attempt, setAttempt] = useState(0)
+  const [busy, setBusy] = useState(false)
+  const [serverError, setServerError] = useState('')
 
-    useEffect(() => {
-        let isMounted = true;
-        api.get(`/admin/car/${id}`)
-            .then(res => {
-                if (isMounted) setFormData(res.data);
-            })
-            .catch(err => {
-                console.error(err);
-            });
-        return () => { isMounted = false; };
-    }, [id]);
+  useEffect(() => {
+    let active = true
+    api
+      .get(`/admin/car/${id}`)
+      .then((res) => {
+        if (active) setCar(res.data)
+      })
+      .catch(() => {
+        if (active) setLoadError(true)
+      })
+    return () => {
+      active = false
+    }
+  }, [id, attempt])
 
-    const handleChange = (e) => {
-        setFormData({ ...formData, [e.target.name]: e.target.value });
-    };
+  const retry = () => {
+    setLoadError(false)
+    setAttempt((n) => n + 1)
+  }
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        try {
-            await api.put(`/admin/car/${id}`, formData);
-            navigate('/admin/dashboard');
-        } catch (err) {
-            console.error(err);
-            alert('Error updating car');
-        }
-    };
+  const handleSubmit = async (payload) => {
+    setBusy(true)
+    setServerError('')
+    try {
+      // Keep the fields the form does not edit (id, availability) from the loaded car.
+      await api.put(`/admin/car/${id}`, { ...car, ...payload })
+      toast.success('Car updated.')
+      navigate('/admin/dashboard')
+    } catch (err) {
+      setServerError(errorMessage(err, 'Could not update the car. Check the details and try again.'))
+    } finally {
+      setBusy(false)
+    }
+  }
 
-    return (
-        <div className="container fade-in" style={{ padding: '2rem 0', maxWidth: '600px' }}>
-            <div className="card">
-                <h2 className="text-center" style={{ marginBottom: '2rem' }}>Update Car</h2>
-                <form onSubmit={handleSubmit}>
-                    <div className="form-group">
-                        <label className="form-label">Brand</label>
-                        <input name="brand" value={formData.brand} onChange={handleChange} className="form-input" required />
-                    </div>
-                    <div className="form-group">
-                        <label className="form-label">Model</label>
-                        <input name="model" value={formData.model} onChange={handleChange} className="form-input" required />
-                    </div>
-                    <div className="form-group">
-                        <label className="form-label">Color</label>
-                        <input name="color" value={formData.color} onChange={handleChange} className="form-input" required />
-                    </div>
-                    <div className="form-group">
-                        <label className="form-label">Year</label>
-                        <input type="number" name="year" value={formData.year} onChange={handleChange} className="form-input" required />
-                    </div>
-                    <div className="form-group">
-                        <label className="form-label">Transmission</label>
-                        <select name="transmission" value={formData.transmission} onChange={handleChange} className="form-input">
-                            <option value="Automatic">Automatic</option>
-                            <option value="Manual">Manual</option>
-                        </select>
-                    </div>
-                    <div className="form-group">
-                        <label className="form-label">Fuel Type</label>
-                        <select name="fuelType" value={formData.fuelType} onChange={handleChange} className="form-input">
-                            <option value="Petrol">Petrol</option>
-                            <option value="Diesel">Diesel</option>
-                            <option value="Electric">Electric</option>
-                            <option value="Hybrid">Hybrid</option>
-                        </select>
-                    </div>
-                    <div className="form-group">
-                        <label className="form-label">Seats</label>
-                        <input type="number" name="seats" value={formData.seats} onChange={handleChange} className="form-input" required min="1" max="10" />
-                    </div>
-                    <div className="form-group">
-                        <label className="form-label">Category</label>
-                        <select name="category" value={formData.category} onChange={handleChange} className="form-input">
-                            <option value="Budget">Budget</option>
-                            <option value="Mid-range">Mid-range</option>
-                            <option value="Family">Family</option>
-                            <option value="SUV">SUV</option>
-                            <option value="Electric">Electric</option>
-                            <option value="Premium">Premium</option>
-                        </select>
-                    </div>
-                    <div className="form-group">
-                        <label className="form-label">Price Per Day</label>
-                        <input type="number" name="pricePerDay" value={formData.pricePerDay} onChange={handleChange} className="form-input" required />
-                    </div>
-                    <div className="form-group">
-                        <label className="form-label">Description</label>
-                        <textarea name="description" value={formData.description} onChange={handleChange} className="form-input" rows="3"></textarea>
-                    </div>
-                    <div className="form-group">
-                        <label className="form-label">Image URL</label>
-                        <input name="imageUrl" value={formData.imageUrl} onChange={handleChange} className="form-input" required />
-                    </div>
-                    <button type="submit" className="btn btn-primary w-full">Update Car</button>
-                </form>
-            </div>
+  return (
+    <div className="mx-auto max-w-2xl px-4 py-10 sm:px-6">
+      <h1 className="text-3xl font-bold">Edit car</h1>
+
+      {loadError ? (
+        <div className="mt-6 rounded-card border border-line bg-surface p-8 text-center">
+          <p className="font-semibold text-ink">This car could not be loaded.</p>
+          <div className="mt-4 flex justify-center gap-3">
+            <button type="button" onClick={retry} className={buttonStyles()}>
+              Try again
+            </button>
+            <Link to="/admin/dashboard" className={buttonStyles({ variant: 'secondary' })}>
+              Back to fleet
+            </Link>
+          </div>
         </div>
-    );
-};
+      ) : !car ? (
+        <div role="status" className="mt-6 h-96 animate-pulse rounded-card bg-line">
+          <span className="sr-only">Loading car</span>
+        </div>
+      ) : (
+        <div className="mt-6 rounded-card border border-line bg-surface p-6 shadow-card sm:p-8">
+          <CarForm
+            key={car.id}
+            initial={car}
+            onSubmit={handleSubmit}
+            submitLabel="Save changes"
+            busy={busy}
+            serverError={serverError}
+          />
+        </div>
+      )}
+    </div>
+  )
+}
 
-export default UpdateCar;
+export default UpdateCar
