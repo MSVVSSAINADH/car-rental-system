@@ -17,6 +17,9 @@ frontend/dist/
 backend/target/surefire-reports/
 backend/target/maven-status/
 
+# Maven build output
+backend/target/
+
 # Local environment secrets (template files stay trackable)
 .env*
 !.env.example
