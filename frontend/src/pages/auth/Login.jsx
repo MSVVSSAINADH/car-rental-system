@@ -1,99 +1,100 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import api from '../../services/api';
-import { saveSession } from '../../services/session';
-import './Auth.css';
+import { useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import api from '../../services/api'
+import { saveSession } from '../../services/session'
+import AuthLayout from '../../components/AuthLayout'
+import FormField from '../../components/FormField'
+import PasswordField from '../../components/PasswordField'
+import { buttonStyles } from '../../lib/buttonStyles'
+import { errorMessage } from '../../lib/errors'
+
+const EMAIL_PATTERN = /^\S+@\S+\.\S+$/
 
 const Login = () => {
-    const navigate = useNavigate();
-    const [form, setForm] = useState({ email: '', password: '' });
-    const [error, setError] = useState('');
-    const [loading, setLoading] = useState(false);
+  const navigate = useNavigate()
+  const [form, setForm] = useState({ email: '', password: '' })
+  const [fieldErrors, setFieldErrors] = useState({})
+  const [formError, setFormError] = useState('')
+  const [loading, setLoading] = useState(false)
 
-    const handleChange = e => setForm({ ...form, [e.target.name]: e.target.value });
+  const handleChange = (e) => {
+    const { name, value } = e.target
+    setForm((prev) => ({ ...prev, [name]: value }))
+    if (fieldErrors[name]) setFieldErrors((prev) => ({ ...prev, [name]: '' }))
+  }
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        if (!form.email || !form.password) {
-            setError('Please enter your email and password.');
-            return;
-        }
-        setLoading(true);
-        setError('');
-        try {
-            const res = await api.post('/auth/login', form);
-            saveSession(res.data);
-            if (res.data.role === 'ADMIN') {
-                navigate('/admin/dashboard');
-            } else {
-                navigate('/customer/dashboard');
-            }
-        } catch (err) {
-            setError(err.response?.data || 'Login failed. Please try again.');
-        } finally {
-            setLoading(false);
-        }
-    };
+  const validate = () => {
+    const errors = {}
+    if (!form.email.trim()) errors.email = 'Enter your email address.'
+    else if (!EMAIL_PATTERN.test(form.email.trim())) errors.email = 'Enter a valid email address.'
+    if (!form.password) errors.password = 'Enter your password.'
+    return errors
+  }
 
-    return (
-        <div className="auth-page">
-            <div className="auth-illustration">
-                <div className="auth-illustration-content">
-                    <div className="auth-logo">CarRental<span>X</span></div>
-                    <h2>Welcome back</h2>
-                    <p>Sign in to browse the current fleet and manage your booking requests.</p>
-                </div>
-                <div className="auth-illustration-overlay"></div>
-            </div>
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    const errors = validate()
+    setFieldErrors(errors)
+    setFormError('')
+    if (Object.keys(errors).length > 0) return
 
-            <div className="auth-form-panel">
-                <div className="auth-form-container fade-in">
-                    <div className="auth-header">
-                        <h1>Welcome back</h1>
-                        <p>Sign in to your CarRentalX account</p>
-                    </div>
+    setLoading(true)
+    try {
+      const res = await api.post('/auth/login', { email: form.email.trim(), password: form.password })
+      saveSession(res.data)
+      navigate(res.data.role === 'ADMIN' ? '/admin/dashboard' : '/customer/dashboard')
+    } catch (err) {
+      setFormError(errorMessage(err, 'Sign in failed. Check your details and try again.'))
+    } finally {
+      setLoading(false)
+    }
+  }
 
-                    {error && <div className="auth-error">{error}</div>}
+  return (
+    <AuthLayout
+      title="Sign in"
+      subtitle="Use your CarRentalX account to browse cars and track your requests."
+      footer={
+        <>
+          New to CarRentalX?{' '}
+          <Link to="/signup" className="font-medium text-primary hover:underline">
+            Create an account
+          </Link>
+        </>
+      }
+    >
+      {formError && (
+        <p role="alert" className="mb-5 rounded-control border border-danger/30 bg-danger-soft px-3 py-2 text-sm text-red-700">
+          {formError}
+        </p>
+      )}
 
-                    <form onSubmit={handleSubmit}>
-                        <div className="form-group">
-                            <label className="form-label">Email address</label>
-                            <input
-                                type="email"
-                                name="email"
-                                className="form-input"
-                                placeholder="you@example.com"
-                                value={form.email}
-                                onChange={handleChange}
-                                autoComplete="email"
-                            />
-                        </div>
-                        <div className="form-group">
-                            <label className="form-label">Password</label>
-                            <input
-                                type="password"
-                                name="password"
-                                className="form-input"
-                                placeholder="Enter your password"
-                                value={form.password}
-                                onChange={handleChange}
-                                autoComplete="current-password"
-                            />
-                        </div>
+      <form onSubmit={handleSubmit} noValidate className="space-y-5">
+        <FormField
+          id="login-email"
+          name="email"
+          type="email"
+          label="Email address"
+          autoComplete="email"
+          value={form.email}
+          onChange={handleChange}
+          error={fieldErrors.email}
+        />
+        <PasswordField
+          id="login-password"
+          name="password"
+          label="Password"
+          autoComplete="current-password"
+          value={form.password}
+          onChange={handleChange}
+          error={fieldErrors.password}
+        />
+        <button type="submit" disabled={loading} className={buttonStyles({ size: 'lg', className: 'w-full' })}>
+          {loading ? 'Signing in' : 'Sign in'}
+        </button>
+      </form>
+    </AuthLayout>
+  )
+}
 
-                        <button type="submit" className="btn btn-primary w-full btn-lg" disabled={loading}>
-                            {loading ? 'Signing in...' : 'Sign In →'}
-                        </button>
-                    </form>
-
-                    <p className="auth-switch">
-                        Don't have an account? <Link to="/signup">Create one free</Link>
-                    </p>
-
-                </div>
-            </div>
-        </div>
-    );
-};
-
-export default Login;
+export default Login
