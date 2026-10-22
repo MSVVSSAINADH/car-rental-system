@@ -1,0 +1,1 @@
+export const BOOKINGS_CHANGED_EVENT = 'carrentalx:bookings-changed'
