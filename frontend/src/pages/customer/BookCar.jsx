@@ -1,349 +1,365 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import api from '../../services/api';
-import CarImage from '../../components/CarImage';
-import { useAppConfig } from '../../services/config';
-import moment from 'moment';
-import '../admin/Dashboard.css';
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import dayjs from 'dayjs'
+import { toast } from 'sonner'
+import api from '../../services/api'
+import { useSession } from '../../services/session'
+import { useAppConfig } from '../../services/config'
+import CarImage from '../../components/CarImage'
+import { buttonStyles } from '../../lib/buttonStyles'
+import { cn } from '../../lib/utils'
+import { formatINR } from '../../lib/format'
+
+const inputClass =
+  'w-full rounded-control border border-line bg-surface px-3 py-2 text-ink hover:border-body'
+
+const BOOKING_TYPES = [
+  {
+    value: 'self',
+    title: 'Self drive',
+    text: 'You drive the car yourself. A valid driving licence is required on your profile.',
+  },
+  {
+    value: 'driver',
+    title: 'With driver',
+    text: 'A driver is provided for the trip.',
+  },
+]
 
 const BookCar = () => {
-    const { id } = useParams();
-    const navigate = useNavigate();
-    const [car, setCar] = useState(null);
-    const [fromDate, setFromDate] = useState('');
-    const [toDate, setToDate] = useState('');
-    const [bookingType, setBookingType] = useState('self');
-    // The quote response is tagged with the dates it belongs to, so a stale
-    // quote from a previous date selection is never shown as the current one.
-    const quoteKey = `${id}|${fromDate}|${toDate}`;
-    const [quoteResult, setQuoteResult] = useState({ key: null, quote: null, error: '' });
-    const config = useAppConfig();
-    const user = React.useMemo(() => {
-        try {
-            return JSON.parse(localStorage.getItem('user'));
-        } catch {
-            return null;
-        }
-    }, []);
+  const { id } = useParams()
+  const navigate = useNavigate()
+  const user = useSession()
+  const config = useAppConfig()
 
-    useEffect(() => {
-        let isMounted = true;
-        api.get(`/customer/car/${id}`)
-            .then(response => {
-                if (isMounted) setCar(response.data);
-            })
-            .catch(error => {
-                console.error("Error fetching car:", error);
-            });
+  const [car, setCar] = useState(null)
+  const [carError, setCarError] = useState(false)
+  const [attempt, setAttempt] = useState(0)
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
+  const [bookingType, setBookingType] = useState('self')
+  const [checking, setChecking] = useState(false)
 
-        return () => { isMounted = false; };
-    }, [id]);
+  // The quote is tagged with the dates it belongs to, so a stale quote from an
+  // earlier date selection is never shown as the current one.
+  const quoteKey = `${id}|${fromDate}|${toDate}`
+  const [quoteResult, setQuoteResult] = useState({ key: null, quote: null, error: '' })
 
-    // Real-time validation derived via useMemo
-    const dateError = React.useMemo(() => {
-        const today = moment().startOf('day');
-        if (fromDate && moment(fromDate).isBefore(today)) {
-            return "Booking date cannot be in the past!";
-        }
-        if (toDate) {
-            if (moment(toDate).isBefore(today)) {
-                return "End date cannot be in the past!";
-            } else if (fromDate && !moment(toDate).isAfter(moment(fromDate))) {
-                return "End date must be after start date";
-            }
-        }
-        return '';
-    }, [fromDate, toDate]);
+  useEffect(() => {
+    let active = true
+    api
+      .get(`/customer/car/${id}`)
+      .then((response) => {
+        if (active) setCar(response.data)
+      })
+      .catch(() => {
+        if (active) setCarError(true)
+      })
+    return () => {
+      active = false
+    }
+  }, [id, attempt])
 
-    // The server is the only authority on price: it applies the intro
-    // discount and checks the dates against existing bookings. The browser
-    // no longer multiplies the daily rate itself.
-    useEffect(() => {
-        if (!car || !fromDate || !toDate || dateError) return undefined;
-        const controller = new AbortController();
-        const requestKey = quoteKey;
-        api.post('/customer/car/quote', { carId: id, fromDate, toDate }, { signal: controller.signal })
-            .then(({ data }) => {
-                setQuoteResult({ key: requestKey, quote: data, error: '' });
-            })
-            .catch(error => {
-                if (error.code === 'ERR_CANCELED') return;
-                setQuoteResult({
-                    key: requestKey,
-                    quote: null,
-                    error: typeof error.response?.data === 'string'
-                        ? error.response.data
-                        : 'This car could not be priced for those dates.'
-                });
-            });
-        return () => controller.abort();
-    }, [car, id, fromDate, toDate, dateError, quoteKey]);
+  const retryCar = () => {
+    setCarError(false)
+    setAttempt((n) => n + 1)
+  }
 
-    const quoteSettled = quoteResult.key === quoteKey;
-    const quote = quoteSettled ? quoteResult.quote : null;
-    const quoteError = quoteSettled ? quoteResult.error : '';
-    const quoteLoading = Boolean(car && fromDate && toDate && !dateError && !quoteSettled);
+  const dateError = useMemo(() => {
+    const today = dayjs().startOf('day')
+    if (fromDate && dayjs(fromDate).isBefore(today)) return 'The start date cannot be in the past.'
+    if (toDate) {
+      if (dayjs(toDate).isBefore(today)) return 'The end date cannot be in the past.'
+      if (fromDate && !dayjs(toDate).isAfter(dayjs(fromDate))) {
+        return 'The end date must be after the start date.'
+      }
+    }
+    return ''
+  }, [fromDate, toDate])
 
-    const isNewCustomer = Boolean(quote?.eligibleForDiscount);
-    const totalPrice = quote?.basePrice ?? 0;
-    const discountedPrice = quote?.totalPrice ?? 0;
-    const discountPercent = quote?.discountPercent ?? 0;
+  // The server is the only authority on price: it applies the intro discount
+  // and checks the dates against existing bookings.
+  useEffect(() => {
+    if (!car || !fromDate || !toDate || dateError) return undefined
+    const controller = new AbortController()
+    const requestKey = quoteKey
+    api
+      .post('/customer/car/quote', { carId: id, fromDate, toDate }, { signal: controller.signal })
+      .then(({ data }) => {
+        setQuoteResult({ key: requestKey, quote: data, error: '' })
+      })
+      .catch((error) => {
+        if (error.code === 'ERR_CANCELED') return
+        setQuoteResult({
+          key: requestKey,
+          quote: null,
+          error:
+            typeof error.response?.data === 'string'
+              ? error.response.data
+              : 'This car could not be priced for those dates.',
+        })
+      })
+    return () => controller.abort()
+  }, [car, id, fromDate, toDate, dateError, quoteKey])
 
-    const handleBook = async () => {
-        if (dateError) {
-            return;
-        }
+  const quoteSettled = quoteResult.key === quoteKey
+  const quote = quoteSettled ? quoteResult.quote : null
+  const quoteError = quoteSettled ? quoteResult.error : ''
+  const quoteLoading = Boolean(car && fromDate && toDate && !dateError && !quoteSettled)
+  const discountAmount = quote ? Math.max(0, (quote.basePrice ?? 0) - (quote.totalPrice ?? 0)) : 0
 
-        if (!fromDate || !toDate) {
-            alert("Please select both dates");
-            return;
-        }
+  const today = dayjs().format('YYYY-MM-DD')
+  const unavailable = car?.available === false
 
-        if (!quote) {
-            alert(quoteError || "Wait for the server to price this booking.");
-            return;
-        }
+  const handleBook = async () => {
+    if (dateError || !fromDate || !toDate) return
+    if (!quote) {
+      toast.error(quoteError || 'Wait for the price to load.')
+      return
+    }
+    if (!user?.id) {
+      navigate('/login')
+      return
+    }
 
-        // Driving licence check for Self Drive. The localStorage snapshot is
-        // taken at login and goes stale as soon as the licence is uploaded
-        // (or changed on another device), which wrongly blocked valid
-        // customers, so ask the server for the authoritative profile first.
-        if (bookingType === 'self') {
-            const currentUser = user;
-            let hasLicense = Boolean(currentUser?.licenseUrl || currentUser?.licenseImage);
-            if (currentUser?.id) {
-                try {
-                    const profile = await api.get(`/customer/profile/${currentUser.id}`);
-                    hasLicense = Boolean(profile.data?.licenseImage);
-                } catch {
-                    // Keep the stored snapshot as best effort; the backend still
-                    // rejects SELF_DRIVE bookings without a licence at submit time.
-                }
-            }
-            if (!hasLicense) {
-                alert("Please update your driving license in your profile to proceed with Self Drive booking!");
-                navigate('/customer/profile');
-                return;
-            }
-        }
+    // The stored session goes stale after a licence upload, so ask the server.
+    if (bookingType === 'self') {
+      setChecking(true)
+      let hasLicense = Boolean(user.licenseUrl || user.licenseImage)
+      try {
+        const profile = await api.get(`/customer/profile/${user.id}`)
+        hasLicense = Boolean(profile.data?.licenseImage)
+      } catch {
+        // Keep the stored snapshot; the backend still rejects self-drive without a licence.
+      }
+      setChecking(false)
+      if (!hasLicense) {
+        toast.error('Add your driving licence to your profile to book a self-drive trip.')
+        navigate('/customer/profile')
+        return
+      }
+    }
 
-        const newBooking = {
-            id: Date.now(),
-            carId: id,
-            userId: user.id,
-            userName: user.name || 'User',
-            userEmail: user.email || 'N/A',
-            fromDate: fromDate,
-            toDate: toDate,
-            totalPrice: quote.totalPrice,
-            originalPrice: quote.basePrice,
-            discountApplied: quote.discountPercent ? `${quote.discountPercent}%` : null,
-            status: 'Pending',
-            carBrand: car.brand,
-            carModel: car.model,
-            carImage: car.imageUrl,
-            bookingType: bookingType === 'self' ? 'SELF_DRIVE' : 'WITH_DRIVER'
-        };
+    const newBooking = {
+      id: Date.now(),
+      carId: id,
+      userId: user.id,
+      userName: user.name || 'User',
+      userEmail: user.email || 'N/A',
+      fromDate,
+      toDate,
+      totalPrice: quote.totalPrice,
+      originalPrice: quote.basePrice,
+      discountApplied: quote.discountPercent ? `${quote.discountPercent}%` : null,
+      status: 'Pending',
+      carBrand: car.brand,
+      carModel: car.model,
+      carImage: car.imageUrl,
+      bookingType: bookingType === 'self' ? 'SELF_DRIVE' : 'WITH_DRIVER',
+    }
 
-        // Navigate to payment page with booking details
-        navigate('/payment', { state: { booking: newBooking } });
-    };
+    navigate('/payment', { state: { booking: newBooking } })
+  }
 
-    if (!car) return <div className="text-center mt-2">Loading...</div>;
-
+  if (carError) {
     return (
-        <div className="container fade-in" style={{ paddingTop: '2rem' }}>
-            <div className="card" style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap' }}>
-                <div style={{ flex: '1', minWidth: '300px' }}>
-                    <CarImage
-                        imageUrl={car.imageUrl}
-                        brand={car.brand}
-                        model={car.model}
-                        className="car-image-detail"
-                    />
-                </div>
-                <div style={{ flex: '1', minWidth: '300px' }}>
-                    <h2 className="text-primary">{car.brand} {car.model}</h2>
-                    <p>{car.description}</p>
-
-                    <div className="car-info" style={{ margin: '1rem 0', gap: '8px', display: 'flex' }}>
-                        <span className="car-type" style={{ color: 'var(--text-color)' }}>{car.year}</span>
-                        <span className="car-type" style={{ color: 'var(--text-color)' }}>{car.transmission}</span>
-                        <span className="car-type" style={{ color: 'var(--text-color)' }}>{car.fuelType}</span>
-                        <span className="car-type" style={{ color: 'var(--text-color)' }}>{car.color}</span>
-                    </div>
-
-                    <h3 className="text-secondary" style={{ marginBottom: '2rem' }}>₹{car.pricePerDay} / Day</h3>
-
-                    <div className="form-group">
-                        <label className="form-label">From Date</label>
-                        <input
-                            type="date"
-                            className="form-input"
-                            value={fromDate}
-                            min={new Date().toISOString().split('T')[0]}
-                            onChange={e => setFromDate(e.target.value)}
-                        />
-                    </div>
-                    <div className="form-group">
-                        <label className="form-label">To Date</label>
-                        <input
-                            type="date"
-                            className="form-input"
-                            value={toDate}
-                            min={fromDate || new Date().toISOString().split('T')[0]}
-                            onChange={e => setToDate(e.target.value)}
-                        />
-                    </div>
-
-                    {dateError && (
-                        <div style={{ color: '#dc2626', fontSize: '0.9rem', marginTop: '-1rem', marginBottom: '1rem' }}>
-                            {dateError}
-                        </div>
-                    )}
-
-                    {!dateError && quoteError && (
-                        <div role="alert" style={{ color: '#b91c1c', fontSize: '0.9rem', marginTop: '-1rem', marginBottom: '1rem' }}>
-                            {quoteError}
-                        </div>
-                    )}
-
-                    {!dateError && !quoteError && quoteLoading && (
-                        <p className="text-muted" style={{ fontSize: '0.85rem', marginTop: '-0.5rem' }}>Checking availability and price…</p>
-                    )}
-
-                    <div className="booking-type-selection" style={{ marginBottom: '2rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                        <div
-                            onClick={() => setBookingType('self')}
-                            style={{
-                                padding: '1rem',
-                                borderRadius: '8px',
-                                border: bookingType === 'self' ? '2px solid #22c55e' : '1px solid #e2e8f0',
-                                backgroundColor: bookingType === 'self' ? '#f0fdf4' : '#fff',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s'
-                            }}
-                        >
-                            <h4 style={{ margin: 0, color: bookingType === 'self' ? '#166534' : '#1e293b' }}>Self Drive</h4>
-                            <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.9rem', color: '#64748b' }}>
-                                You drive the car yourself. Valid driving licence required.
-                            </p>
-                        </div>
-
-                        <div
-                            onClick={() => setBookingType('driver')}
-                            style={{
-                                padding: '1rem',
-                                borderRadius: '8px',
-                                border: bookingType === 'driver' ? '2px solid #3b82f6' : '1px solid #e2e8f0',
-                                backgroundColor: bookingType === 'driver' ? '#eff6ff' : '#fff',
-                                cursor: 'pointer',
-                                transition: 'all 0.2s'
-                            }}
-                        >
-                            <h4 style={{ margin: 0, color: bookingType === 'driver' ? '#1e40af' : '#1e293b' }}>With Driver</h4>
-                            <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.9rem', color: '#64748b' }}>
-                                A professional driver will be provided.
-                            </p>
-                        </div>
-                    </div>
-
-                    {isNewCustomer && totalPrice > 0 && (
-                        <div className="price-comparison" style={{
-                            background: 'linear-gradient(to right, #e0e7ff, #f3e8ff)',
-                            border: '2px solid #6366f1',
-                            borderRadius: '16px',
-                            padding: '1.5rem',
-                            marginBottom: '2rem',
-                            boxShadow: '0 10px 25px -5px rgba(99, 102, 241, 0.2)',
-                            position: 'relative',
-                            overflow: 'hidden'
-                        }}>
-                            <div style={{
-                                position: 'absolute',
-                                top: '0',
-                                right: '0',
-                                background: '#dc2626',
-                                color: 'white',
-                                padding: '0.4rem 1.2rem',
-                                borderBottomLeftRadius: '12px',
-                                fontWeight: 'bold',
-                                fontSize: '0.9rem'
-                            }}>
-                                {discountPercent}% OFF
-                            </div>
-
-                            <h3 style={{
-                                fontSize: '1.3rem',
-                                marginBottom: '1rem',
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: '8px',
-                                color: '#4338ca'
-                            }}>
-                                <span>🎉</span> {config ? `First ${config.introBookingLimit} Bookings Special!` : 'Introductory Offer'}
-                            </h3>
-
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
-                                <div style={{ color: '#64748b' }}>
-                                    <p style={{ margin: 0, fontSize: '0.9rem' }}>Original Price</p>
-                                    <p style={{
-                                        margin: 0,
-                                        fontSize: '1.5rem',
-                                        textDecoration: 'line-through',
-                                        color: '#94a3b8',
-                                        fontWeight: '500'
-                                    }}>
-                                        ₹{totalPrice}
-                                    </p>
-                                </div>
-
-                                <div style={{ fontSize: '2rem', color: '#6366f1' }}>➔</div>
-
-                                <div>
-                                    <p style={{ margin: 0, fontSize: '0.9rem', color: '#4338ca', fontWeight: 'bold' }}>You Pay Only</p>
-                                    <p style={{
-                                        margin: 0,
-                                        fontSize: '2.2rem',
-                                        fontWeight: '800',
-                                        color: '#4f46e5',
-                                        textShadow: '0 2px 4px rgba(79, 70, 229, 0.2)'
-                                    }}>
-                                        ₹{discountedPrice}
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div style={{ marginTop: '1rem', paddingTop: '0.8rem', borderTop: '1px dashed #a5b4fc', color: '#4338ca', fontSize: '0.95rem' }}>
-                                You are saving <span style={{ fontWeight: 'bold' }}>₹{totalPrice - discountedPrice}</span> on this booking!
-                            </div>
-                        </div>
-                    )}
-
-                    {!isNewCustomer && totalPrice > 0 && (
-                        <div className="total-price-box" style={{ background: 'var(--surface-color)', padding: '1rem', borderRadius: '8px', marginBottom: '1rem', border: '1px solid var(--primary-color)' }}>
-                            <h4>Total Price: <span className="text-primary">₹{totalPrice}</span></h4>
-                        </div>
-                    )}
-
-                    <button
-                        className="btn btn-primary w-full"
-                        onClick={handleBook}
-                        disabled={!quote || quoteLoading}
-                        style={{
-                            fontSize: '1.1rem',
-                            padding: '0.8rem',
-                            opacity: (!quote || quoteLoading) ? 0.6 : 1,
-                            cursor: (!quote || quoteLoading) ? 'not-allowed' : 'pointer',
-                            background: isNewCustomer ? 'linear-gradient(to right, #4f46e5, #7c3aed)' : 'var(--primary-color)'
-                        }}
-                    >
-                        {quote ? `Continue with ₹${quote.totalPrice}` : 'Confirm Booking'}
-                    </button>
-                </div>
-            </div>
+      <div className="mx-auto max-w-2xl px-4 py-16 sm:px-6">
+        <div className="rounded-card border border-line bg-surface p-8 text-center">
+          <p className="font-semibold text-ink">This car could not be loaded.</p>
+          <p className="mt-1 text-sm text-body">It may have been removed, or the connection failed.</p>
+          <div className="mt-4 flex justify-center gap-3">
+            <button type="button" onClick={retryCar} className={buttonStyles()}>
+              Try again
+            </button>
+            <Link to="/customer/dashboard" className={buttonStyles({ variant: 'secondary' })}>
+              Back to cars
+            </Link>
+          </div>
         </div>
-    );
-};
+      </div>
+    )
+  }
 
-export default BookCar;
+  if (!car) {
+    return (
+      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6" role="status">
+        <div className="grid gap-8 lg:grid-cols-5">
+          <div className="lg:col-span-3">
+            <div className="aspect-[16/10] animate-pulse rounded-card bg-line" />
+            <div className="mt-6 h-8 w-1/2 animate-pulse rounded-badge bg-line" />
+          </div>
+          <div className="h-96 animate-pulse rounded-card bg-line lg:col-span-2" />
+        </div>
+        <span className="sr-only">Loading car</span>
+      </div>
+    )
+  }
+
+  const specs = [car.year, car.transmission, car.fuelType, car.color, car.seats ? `${car.seats} seats` : null].filter(
+    Boolean,
+  )
+
+  return (
+    <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+      <Link to="/customer/dashboard" className="text-sm font-medium text-primary hover:underline">
+        Back to cars
+      </Link>
+
+      <div className="mt-4 grid gap-8 lg:grid-cols-5">
+        <div className="lg:col-span-3">
+          <div className="aspect-[16/10] overflow-hidden rounded-card border border-line bg-line">
+            <CarImage imageUrl={car.imageUrl} brand={car.brand} model={car.model} />
+          </div>
+
+          <div className="mt-6 flex flex-wrap items-start justify-between gap-3">
+            <h1 className="text-3xl font-bold">
+              {car.brand} {car.model}
+            </h1>
+            {car.category && (
+              <span className="rounded-badge bg-primary-soft px-2 py-1 text-xs font-semibold text-primary">
+                {car.category}
+              </span>
+            )}
+          </div>
+
+          {specs.length > 0 && (
+            <ul className="mt-4 flex flex-wrap gap-2">
+              {specs.map((spec) => (
+                <li key={spec} className="rounded-badge border border-line bg-surface px-2 py-1 text-sm text-body">
+                  {spec}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          {car.description && <p className="mt-6 max-w-2xl text-body">{car.description}</p>}
+        </div>
+
+        <aside className="lg:col-span-2">
+          <div className="rounded-card border border-line bg-surface p-6 shadow-card lg:sticky lg:top-24">
+            <h2 className="text-xl font-bold">Request this car</h2>
+            <p className="mt-1 text-body">
+              <span className="text-2xl font-bold text-ink">{formatINR(car.pricePerDay)}</span> per day
+            </p>
+
+            {unavailable && (
+              <p role="alert" className="mt-4 rounded-control bg-danger-soft px-3 py-2 text-sm text-red-700">
+                This car is not available right now.
+              </p>
+            )}
+
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
+              <div>
+                <label htmlFor="from-date" className="mb-1 block text-sm font-medium text-ink">
+                  From date
+                </label>
+                <input
+                  id="from-date"
+                  type="date"
+                  className={inputClass}
+                  value={fromDate}
+                  min={today}
+                  onChange={(e) => setFromDate(e.target.value)}
+                />
+              </div>
+              <div>
+                <label htmlFor="to-date" className="mb-1 block text-sm font-medium text-ink">
+                  To date
+                </label>
+                <input
+                  id="to-date"
+                  type="date"
+                  className={inputClass}
+                  value={toDate}
+                  min={fromDate || today}
+                  onChange={(e) => setToDate(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {dateError && (
+              <p role="alert" className="mt-3 text-sm text-red-700">
+                {dateError}
+              </p>
+            )}
+            {!dateError && quoteError && (
+              <p role="alert" className="mt-3 text-sm text-red-700">
+                {quoteError}
+              </p>
+            )}
+
+            <fieldset className="mt-6">
+              <legend className="mb-2 text-sm font-medium text-ink">Booking type</legend>
+              <div className="space-y-3">
+                {BOOKING_TYPES.map((type) => (
+                  <label key={type.value} className="block cursor-pointer">
+                    <input
+                      type="radio"
+                      name="bookingType"
+                      value={type.value}
+                      checked={bookingType === type.value}
+                      onChange={() => setBookingType(type.value)}
+                      className="peer sr-only"
+                    />
+                    <div
+                      className={cn(
+                        'rounded-card border border-line bg-surface p-4 transition-colors',
+                        'hover:border-body peer-checked:border-primary peer-checked:bg-primary-soft',
+                        'peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-primary',
+                      )}
+                    >
+                      <p className="font-semibold text-ink">{type.title}</p>
+                      <p className="mt-1 text-sm text-body">{type.text}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+
+            <div aria-live="polite" className="mt-6">
+              {quoteLoading && <p className="text-sm text-body">Checking availability and price</p>}
+
+              {quote && (
+                <dl className="space-y-2 rounded-card border border-line bg-page p-4 text-sm">
+                  <div className="flex justify-between gap-4">
+                    <dt className="text-body">Price before discount</dt>
+                    <dd className="font-medium text-ink">{formatINR(quote.basePrice)}</dd>
+                  </div>
+                  {discountAmount > 0 && (
+                    <div className="flex justify-between gap-4">
+                      <dt className="text-body">New customer discount ({quote.discountPercent}%)</dt>
+                      <dd className="font-medium text-success">-{formatINR(discountAmount)}</dd>
+                    </div>
+                  )}
+                  <div className="flex justify-between gap-4 border-t border-line pt-2 text-base">
+                    <dt className="font-semibold text-ink">Total</dt>
+                    <dd className="font-bold text-ink">{formatINR(quote.totalPrice)}</dd>
+                  </div>
+                  {quote.eligibleForDiscount && config && (
+                    <p className="pt-1 text-body">
+                      The offer applies to your first {config.introBookingLimit} bookings.
+                    </p>
+                  )}
+                </dl>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={handleBook}
+              disabled={!quote || quoteLoading || checking || unavailable}
+              className={buttonStyles({ size: 'lg', className: 'mt-6 w-full' })}
+            >
+              {quote ? `Review request, ${formatINR(quote.totalPrice)}` : 'Review request'}
+            </button>
+            <p className="mt-3 text-center text-sm text-body">
+              Nothing is charged. An administrator reviews every request.
+            </p>
+          </div>
+        </aside>
+      </div>
+    </div>
+  )
+}
+
+export default BookCar
