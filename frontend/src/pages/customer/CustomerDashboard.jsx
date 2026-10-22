@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+{/*import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../../services/api';
 import CarImage from '../../components/CarImage';
@@ -69,7 +69,7 @@ const CustomerDashboard = () => {
     return (
         <div className="fade-in">
             {/* Category Pills */}
-            <div className="category-bar">
+            {/*<div className="category-bar">
                 {CATEGORIES.map(cat => (
                     <button
                         key={cat}
@@ -82,7 +82,7 @@ const CustomerDashboard = () => {
             </div>
 
             <div className="container" style={{ paddingTop: '1.5rem', paddingBottom: '4rem' }}>
-                {/* Action Bar */}
+                {/* Action Bar */}{/*
                 <div className="cd-action-bar">
                     <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
                         <button className={`btn btn-sm btn-secondary ${showFilters ? 'btn-outline' : ''}`} onClick={() => setShowFilters(!showFilters)}>
@@ -108,7 +108,7 @@ const CustomerDashboard = () => {
                 </div>
 
                 <div className="cd-main">
-                    {/* Filter Sidebar */}
+                    {/* Filter Sidebar */}{/*
                     {showFilters && (
                         <aside className="cd-filters fade-in">
                             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
@@ -152,7 +152,7 @@ const CustomerDashboard = () => {
                         </aside>
                     )}
 
-                    {/* Cars Grid */}
+                    {/* Cars Grid */}{/*
                     <div className="cars-grid" style={{ flex: 1 }}>
                         {loading ? (
                             [...Array(8)].map((_, i) => <SkeletonCard key={i} />)
@@ -207,4 +207,8 @@ const CustomerDashboard = () => {
     );
 };
 
-export default CustomerDashboard;
+export default CustomerDashboard;*/}
+
+import Cars from '../Cars'
+
+export default Cars
