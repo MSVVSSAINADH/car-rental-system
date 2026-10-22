@@ -22,11 +22,15 @@ api.interceptors.request.use(config => {
     return Promise.reject(error);
 });
 
-// Response interceptor — on 401, clear session and redirect to login
+// Response interceptor: on 401, clear the session and redirect to login.
+// Sign-in and sign-up requests are excluded so a wrong password shows its error
+// instead of reloading the page.
 api.interceptors.response.use(
     response => response,
     error => {
-        if (error.response && error.response.status === 401) {
+        const url = error.config?.url || '';
+        const isAuthRequest = url.startsWith('/auth/');
+        if (error.response && error.response.status === 401 && !isAuthRequest) {
             localStorage.removeItem('user');
             window.location.href = '/login';
         }
