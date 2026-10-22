@@ -1,103 +1,200 @@
-import React, { useEffect, useState } from 'react';
-import api from '../../services/api';
+import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { toast } from 'sonner'
+import api from '../../services/api'
+import { useSession } from '../../services/session'
+import { buttonStyles } from '../../lib/buttonStyles'
+import { cn } from '../../lib/utils'
+import { formatDate, formatINR } from '../../lib/format'
+
+const STATUS = {
+  APPROVED: { label: 'Approved', className: 'bg-success-soft text-success' },
+  PENDING: { label: 'Pending review', className: 'bg-warning-soft text-warning' },
+  REJECTED: { label: 'Rejected', className: 'bg-danger-soft text-red-700' },
+}
+
+const TYPE_LABELS = { SELF_DRIVE: 'Self drive', WITH_DRIVER: 'With driver' }
+
+function InvoiceDialog({ html, onClose }) {
+  const ref = useRef(null)
+
+  useEffect(() => {
+    const dialog = ref.current
+    if (dialog && !dialog.open) dialog.showModal()
+  }, [])
+
+  return (
+    <dialog
+      ref={ref}
+      onClose={onClose}
+      aria-label="Invoice"
+      className="m-auto w-[min(48rem,92vw)] rounded-card border border-line bg-surface p-0 shadow-lift backdrop:bg-ink/40"
+    >
+      <div className="flex items-center justify-between border-b border-line px-4 py-3">
+        <h2 className="text-base font-semibold">Invoice</h2>
+        <button
+          type="button"
+          onClick={() => ref.current?.close()}
+          className={buttonStyles({ variant: 'secondary', size: 'sm' })}
+        >
+          Close
+        </button>
+      </div>
+      <iframe title="Invoice" sandbox="" srcDoc={html} className="h-[70vh] w-full bg-white" />
+    </dialog>
+  )
+}
 
 const MyBookings = () => {
-    const user = React.useMemo(() => {
-        try {
-            return JSON.parse(localStorage.getItem('user'));
-        } catch {
-            return null;
-        }
-    }, []);
-    const [bookings, setBookings] = useState([]);
-    const [loading, setLoading] = useState(() => Boolean(user?.id));
+  const user = useSession()
+  const [bookings, setBookings] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
+  const [attempt, setAttempt] = useState(0)
+  const [invoiceHtml, setInvoiceHtml] = useState(null)
+  const [invoiceLoadingId, setInvoiceLoadingId] = useState(null)
 
-    useEffect(() => {
-        if (!user?.id) return;
-        let isMounted = true;
-        api.get(`/customer/car/bookings/${user.id}`)
-            .then(res => {
-                if (isMounted) setBookings(Array.isArray(res.data) ? res.data.reverse() : []);
-            })
-            .catch(console.error)
-            .finally(() => {
-                if (isMounted) setLoading(false);
-            });
-        return () => { isMounted = false; };
-    }, [user?.id]);
+  useEffect(() => {
+    if (!user?.id) return undefined
+    let active = true
+    api
+      .get(`/customer/car/bookings/${user.id}`)
+      .then((res) => {
+        if (active) setBookings(Array.isArray(res.data) ? [...res.data].reverse() : [])
+      })
+      .catch(() => {
+        if (active) setError(true)
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [user?.id, attempt])
 
-    const getStatusStyle = (status) => ({
-        'APPROVED': { bg: 'rgba(16,185,129,.1)', color: '#059669', label: '✅ Approved', icon: '✅' },
-        'REJECTED': { bg: 'rgba(239,68,68,.1)', color: '#dc2626', label: '❌ Rejected', icon: '❌' },
-        'PENDING':  { bg: 'rgba(245,158,11,.1)', color: '#d97706', label: '⏳ Pending', icon: '⏳' },
-    }[status] || { bg: '#f1f5f9', color: '#64748b', label: status, icon: '•' });
+  const retry = () => {
+    setError(false)
+    setLoading(true)
+    setAttempt((n) => n + 1)
+  }
 
-    return (
-        <div className="container fade-in" style={{ paddingTop: '2rem', paddingBottom: '4rem', maxWidth: 780 }}>
-            <div className="dashboard-header">
-                <div>
-                    <h1 style={{ fontFamily: 'Poppins,sans-serif', fontWeight: 800, margin: 0 }}>My Bookings</h1>
-                    <p style={{ color: 'var(--text-muted)', margin: '4px 0 0' }}>Track all your car rental history</p>
-                </div>
-                <span className="badge badge-primary" style={{ padding: '8px 16px', fontSize: '0.9rem' }}>
-                    {bookings.length} booking{bookings.length !== 1 ? 's' : ''}
-                </span>
-            </div>
+  const openInvoice = async (booking) => {
+    setInvoiceLoadingId(booking.id)
+    try {
+      const res = await api.get(`/customer/booking/${booking.id}/invoice`, { responseType: 'text' })
+      setInvoiceHtml(res.data)
+    } catch {
+      toast.error('The invoice could not be loaded.')
+    } finally {
+      setInvoiceLoadingId(null)
+    }
+  }
 
-            {loading ? (
-                <div className="cards-stack">
-                    {[...Array(3)].map((_, i) => (
-                        <div key={i} className="card" style={{ marginBottom: '1rem' }}>
-                            <div className="skeleton skeleton-text" />
-                            <div className="skeleton skeleton-text w-75" style={{ marginTop: 8 }} />
-                        </div>
-                    ))}
-                </div>
-            ) : bookings.length === 0 ? (
-                <div className="card empty-state">
-                    <div className="empty-state-icon">🗓</div>
-                    <h3>No bookings yet</h3>
-                    <p>Browse our fleet and book your first ride!</p>
-                    <a href="/customer/dashboard" className="btn btn-primary">Browse Cars</a>
-                </div>
-            ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                    {bookings.map(b => {
-                        const s = getStatusStyle(b.bookingStatus);
-                        return (
-                            <div key={b.id} className="card" style={{ padding: '1.5rem', borderLeft: `4px solid ${s.color}` }}>
-                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
-                                    <div>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                                            <h3 style={{ margin: 0, fontWeight: 700 }}>
-                                                {b.carBrand} {b.carModel}
-                                            </h3>
-                                            <span className="badge" style={{ background: s.bg, color: s.color, fontSize: '0.78rem' }}>
-                                                {s.label}
-                                            </span>
-                                        </div>
-                                        <div style={{ display: 'flex', gap: '1.5rem', color: 'var(--text-muted)', fontSize: '0.9rem', flexWrap: 'wrap' }}>
-                                            <span>📅 {b.fromDate} → {b.toDate}</span>
-                                            <span>🗓 {b.days} day{b.days !== 1 ? 's' : ''}</span>
-                                            {b.bookingType && <span>🚗 {b.bookingType === 'SELF_DRIVE' ? 'Self Drive' : 'With Driver'}</span>}
-                                        </div>
-                                    </div>
-                                    <div style={{ textAlign: 'right' }}>
-                                        <p style={{ margin: 0, fontSize: '1.5rem', fontWeight: 800, color: 'var(--primary)' }}>
-                                            ₹{(b.price || 0).toLocaleString('en-IN')}
-                                        </p>
-                                        <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                                            Booking #{String(b.id).slice(-5)}
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                        );
-                    })}
-                </div>
-            )}
+  return (
+    <div className="mx-auto max-w-3xl px-4 py-10 sm:px-6">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-bold">My bookings</h1>
+          <p className="mt-1 text-body">Your requests and their status.</p>
         </div>
-    );
-};
+        {!loading && !error && (
+          <p className="text-sm text-body">
+            {bookings.length} {bookings.length === 1 ? 'booking' : 'bookings'}
+          </p>
+        )}
+      </div>
 
-export default MyBookings;
+      <div className="mt-8">
+        {loading ? (
+          <div className="space-y-4" role="status">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="rounded-card border border-line bg-surface p-5">
+                <div className="h-5 w-1/3 animate-pulse rounded-badge bg-line" />
+                <div className="mt-3 h-4 w-2/3 animate-pulse rounded-badge bg-line" />
+              </div>
+            ))}
+            <span className="sr-only">Loading bookings</span>
+          </div>
+        ) : error ? (
+          <div className="rounded-card border border-line bg-surface p-8 text-center">
+            <p className="font-semibold text-ink">Your bookings could not be loaded.</p>
+            <p className="mt-1 text-sm text-body">Check your connection and try again.</p>
+            <button type="button" onClick={retry} className={buttonStyles({ className: 'mt-4' })}>
+              Try again
+            </button>
+          </div>
+        ) : bookings.length === 0 ? (
+          <div className="rounded-card border border-line bg-surface p-8 text-center">
+            <p className="font-semibold text-ink">No bookings yet.</p>
+            <p className="mt-1 text-sm text-body">Browse the fleet and send your first request.</p>
+            <Link to="/customer/dashboard" className={buttonStyles({ className: 'mt-4' })}>
+              Browse cars
+            </Link>
+          </div>
+        ) : (
+          <ul className="space-y-4">
+            {bookings.map((b) => {
+              const status = STATUS[b.bookingStatus] || {
+                label: b.bookingStatus || 'Unknown',
+                className: 'bg-page text-body',
+              }
+              const type = TYPE_LABELS[b.bookingType]
+              return (
+                <li key={b.id} className="rounded-card border border-line bg-surface p-5 shadow-card">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-3">
+                        <h2 className="text-lg font-semibold">
+                          {b.carBrand} {b.carModel}
+                        </h2>
+                        <span
+                          className={cn('rounded-badge px-2 py-0.5 text-xs font-semibold', status.className)}
+                        >
+                          {status.label}
+                        </span>
+                      </div>
+                      <p className="mt-2 text-sm text-body">
+                        {formatDate(b.fromDate)} to {formatDate(b.toDate)}
+                        {b.days ? `, ${b.days} ${b.days === 1 ? 'day' : 'days'}` : ''}
+                        {type ? `, ${type}` : ''}
+                      </p>
+                      {b.bookingStatus === 'PENDING' && (
+                        <p className="mt-2 text-sm text-body">Awaiting approval. We will notify you here.</p>
+                      )}
+                      {b.bookingStatus === 'REJECTED' && b.rejectionReason && (
+                        <p className="mt-2 text-sm text-body">Reason: {b.rejectionReason}</p>
+                      )}
+                    </div>
+
+                    <div className="text-right">
+                      <p className="text-xl font-bold text-ink">{formatINR(b.price)}</p>
+                      <p className="text-xs text-body">Booking #{String(b.id).slice(-5)}</p>
+                    </div>
+                  </div>
+
+                  {b.bookingStatus === 'APPROVED' && (
+                    <div className="mt-4 border-t border-line pt-4">
+                      <button
+                        type="button"
+                        onClick={() => openInvoice(b)}
+                        disabled={invoiceLoadingId === b.id}
+                        className={buttonStyles({ variant: 'secondary', size: 'sm' })}
+                      >
+                        {invoiceLoadingId === b.id ? 'Loading invoice' : 'View invoice'}
+                      </button>
+                    </div>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        )}
+      </div>
+
+      {invoiceHtml !== null && <InvoiceDialog html={invoiceHtml} onClose={() => setInvoiceHtml(null)} />}
+    </div>
+  )
+}
+
+export default MyBookings

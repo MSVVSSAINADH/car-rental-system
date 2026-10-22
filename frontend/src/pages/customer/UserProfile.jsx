@@ -1,172 +1,250 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import api from '../../services/api';
-import { mergeProfileIntoSession, readSession, saveSession } from '../../services/session';
-import './UserProfile.css';
+import { useEffect, useRef, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
+import api from '../../services/api'
+import { mergeProfileIntoSession, readSession, saveSession } from '../../services/session'
+import { buttonStyles } from '../../lib/buttonStyles'
+
+const MAX_BYTES = 500000
+
+const inputClass =
+  'w-full rounded-control border border-line bg-surface px-3 py-2 text-ink hover:border-body'
+
+function readImage(file, onLoad) {
+  if (!file) return
+  if (!file.type.startsWith('image/')) {
+    toast.error('Please choose an image file.')
+    return
+  }
+  if (file.size > MAX_BYTES) {
+    toast.error('The image is too large. Please choose one under 500 KB.')
+    return
+  }
+  const reader = new FileReader()
+  reader.onload = () => onLoad(reader.result)
+  reader.readAsDataURL(file)
+}
 
 const UserProfile = () => {
-    const navigate = useNavigate();
-    const [user, setUser] = useState({
-        name: '',
-        email: '',
-        licenseUrl: '',
-        avatarUrl: ''
-    });
-    const [previewUrl, setPreviewUrl] = useState('');
-    const [message, setMessage] = useState('');
+  const navigate = useNavigate()
+  const avatarInput = useRef(null)
+  const licenceInput = useRef(null)
 
-    useEffect(() => {
-        const fetchProfile = async () => {
-            const storedUser = readSession();
-            if (!storedUser || !storedUser.id) {
-                navigate('/login');
-                return;
-            }
+  const [user, setUser] = useState({ name: '', email: '', licenseUrl: '', avatarUrl: '' })
+  const [previewUrl, setPreviewUrl] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
+  const [attempt, setAttempt] = useState(0)
+  const [saving, setSaving] = useState(false)
 
-            try {
-                const response = await api.get(`/customer/profile/${storedUser.id}`);
-                const profile = response.data;
-                setUser(profile);
-                if (profile.licenseImage) setPreviewUrl(profile.licenseImage); // Use new field name
-                if (profile.licenseUrl && !profile.licenseImage) setPreviewUrl(profile.licenseUrl); // Fallback
-            } catch (error) {
-                console.error("Failed to fetch profile", error);
-                // Fallback to stored user if API fails? No, purely rely on API for data
-                // But for smooth UX maybe... let's stick to API strictness requested by user
-            }
-        };
+  useEffect(() => {
+    const stored = readSession()
+    if (!stored?.id) {
+      navigate('/login')
+      return undefined
+    }
+    let active = true
+    api
+      .get(`/customer/profile/${stored.id}`)
+      .then((response) => {
+        if (!active) return
+        const profile = response.data
+        setUser(profile)
+        setPreviewUrl(profile.licenseImage || profile.licenseUrl || '')
+      })
+      .catch(() => {
+        if (active) setLoadError(true)
+      })
+      .finally(() => {
+        if (active) setLoading(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [navigate, attempt])
 
-        fetchProfile();
-    }, [navigate]);
+  const retry = () => {
+    setLoadError(false)
+    setLoading(true)
+    setAttempt((n) => n + 1)
+  }
 
-    const handleFileChange = (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            if (file.size > 500000) { // 500KB limit
-                alert("File is too large! Please upload separate image smaller than 500KB.");
-                return;
-            }
+  const handleLicenceChange = (e) => {
+    const file = e.target.files[0]
+    e.target.value = ''
+    readImage(file, (data) => {
+      setPreviewUrl(data)
+      setUser((prev) => ({ ...prev, licenseImage: data }))
+    })
+  }
 
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                setPreviewUrl(reader.result);
-                // Use backend compatible field names
-                setUser((prev) => ({ ...prev, licenseImage: reader.result }));
-            };
-            reader.readAsDataURL(file);
-        }
-    };
+  const handleAvatarChange = (e) => {
+    const file = e.target.files[0]
+    e.target.value = ''
+    readImage(file, (data) => setUser((prev) => ({ ...prev, profileImage: data })))
+  }
 
-    const handleAvatarChange = (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            if (file.size > 500000) {
-                alert("Image too large (max 500KB)");
-                return;
-            }
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                // Use backend compatible field names
-                setUser((prev) => ({ ...prev, profileImage: reader.result }));
-            };
-            reader.readAsDataURL(file);
-        }
-    };
+  const removeLicence = () => {
+    setPreviewUrl('')
+    setUser((prev) => ({ ...prev, licenseImage: '' }))
+  }
 
-    const handleSave = async () => {
-        try {
-            await api.put('/customer/profile', user);
+  const handleSave = async () => {
+    if (!user.name?.trim()) {
+      toast.error('Please enter your name.')
+      return
+    }
+    setSaving(true)
+    try {
+      await api.put('/customer/profile', user)
+      // The profile response has no JWT, so the merge keeps the stored token.
+      saveSession(mergeProfileIntoSession(readSession(), user))
+      toast.success('Profile updated.')
+    } catch {
+      toast.error('Could not update your profile. Try again.')
+    } finally {
+      setSaving(false)
+    }
+  }
 
-            // Keep the local session in step with the backend so the rest of the
-            // app sees the new name immediately. The profile response has no JWT,
-            // so the merge must not overwrite the stored token with null.
-            saveSession(mergeProfileIntoSession(readSession(), user));
-
-            setMessage('Profile updated successfully!');
-            setTimeout(() => setMessage(''), 3000);
-        } catch (error) {
-            console.error("Failed to update profile", error);
-            setMessage('Failed to update profile. Try again.');
-        }
-    };
-
+  if (loading) {
     return (
-        <div className="user-profile-container fade-in">
-            <div className="profile-card">
-                <div className="profile-header">
-                    <div className="profile-avatar-container">
-                        <div className="profile-avatar" onClick={() => document.getElementById('avatar-upload').click()}>
-                            {user.profileImage || user.avatarUrl ? (
-                                <img src={user.profileImage || user.avatarUrl} alt="Profile" />
-                            ) : (
-                                user.name ? user.name.charAt(0).toUpperCase() : 'U'
-                            )}
-                            <div className="avatar-overlay">
-                                <span>📷</span>
-                            </div>
-                        </div>
-                        <input
-                            type="file"
-                            id="avatar-upload"
-                            accept="image/*"
-                            style={{ display: 'none' }}
-                            onChange={handleAvatarChange}
-                        />
-                    </div>
-                    <h2>{user.name || 'User Profile'}</h2>
-                    <p className="profile-email-sub">{user.email}</p>
-                </div>
+      <div className="mx-auto max-w-xl px-4 py-10 sm:px-6" role="status">
+        <div className="h-96 animate-pulse rounded-card bg-line" />
+        <span className="sr-only">Loading profile</span>
+      </div>
+    )
+  }
 
-                <div className="profile-details-grid">
-                    <div className="detail-item">
-                        <span className="detail-icon">👤</span>
-                        <div className="detail-text" style={{ flex: 1 }}>
-                            <label>Full Name</label>
-                            <input
-                                type="text"
-                                className="profile-edit-input"
-                                value={user.name}
-                                onChange={(e) => setUser(prev => ({ ...prev, name: e.target.value }))}
-                                placeholder="Enter your full name"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="detail-item">
-                        <span className="detail-icon">✉️</span>
-                        <div className="detail-text">
-                            <label>Email Address</label>
-                            <p>{user.email}</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="profile-field license-section">
-                    <label>Driving License</label>
-                    <div className="license-upload-area">
-                        {previewUrl ? (
-                            <div className="license-preview">
-                                <img src={previewUrl} alt="Driving License" />
-                                <button className="btn-remove" onClick={() => { setPreviewUrl(''); setUser({ ...user, licenseImage: '' }) }}>Remove</button>
-                            </div>
-                        ) : (
-                            <div className="upload-placeholder">
-                                <span style={{ fontSize: '3rem' }}>🪪</span>
-                                <p>Upload your Driving License</p>
-                                <input type="file" accept="image/*" onChange={handleFileChange} />
-                            </div>
-                        )}
-                    </div>
-                    {/* Add fallback instructions if needed */}
-                    <p className="text-muted small">Required for booking. Max size 500KB.</p>
-                </div>
-
-                {message && <div className="success-message">{message}</div>}
-
-                <button className="btn btn-primary save-profile-btn" onClick={handleSave}>Save Profile</button>
-            </div>
+  if (loadError) {
+    return (
+      <div className="mx-auto max-w-xl px-4 py-16 sm:px-6">
+        <div className="rounded-card border border-line bg-surface p-8 text-center">
+          <p className="font-semibold text-ink">Your profile could not be loaded.</p>
+          <button type="button" onClick={retry} className={buttonStyles({ className: 'mt-4' })}>
+            Try again
+          </button>
         </div>
-    );
-};
+      </div>
+    )
+  }
 
-export default UserProfile;
+  const avatarSrc = user.profileImage || user.avatarUrl
+  const initial = user.name ? user.name.charAt(0).toUpperCase() : 'U'
+
+  return (
+    <div className="mx-auto max-w-xl px-4 py-10 sm:px-6">
+      <h1 className="text-3xl font-bold">My profile</h1>
+
+      <div className="mt-6 space-y-6">
+        <section className="rounded-card border border-line bg-surface p-6 shadow-card" aria-labelledby="details">
+          <h2 id="details" className="text-lg font-semibold">
+            Your details
+          </h2>
+
+          <div className="mt-4 flex items-center gap-4">
+            <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-card border border-line bg-primary-soft text-2xl font-bold text-primary">
+              {avatarSrc ? <img src={avatarSrc} alt="Your profile" className="h-full w-full object-cover" /> : initial}
+            </div>
+            <div>
+              <button
+                type="button"
+                onClick={() => avatarInput.current?.click()}
+                className={buttonStyles({ variant: 'secondary', size: 'sm' })}
+              >
+                {avatarSrc ? 'Change photo' : 'Add photo'}
+              </button>
+              <p className="mt-1 text-sm text-body">Image under 500 KB.</p>
+              <input ref={avatarInput} type="file" accept="image/*" className="hidden" onChange={handleAvatarChange} />
+            </div>
+          </div>
+
+          <div className="mt-6 space-y-4">
+            <div>
+              <label htmlFor="profile-name" className="mb-1 block text-sm font-medium text-ink">
+                Full name
+              </label>
+              <input
+                id="profile-name"
+                type="text"
+                className={inputClass}
+                value={user.name || ''}
+                onChange={(e) => setUser((prev) => ({ ...prev, name: e.target.value }))}
+                autoComplete="name"
+              />
+            </div>
+            <div>
+              <label htmlFor="profile-email" className="mb-1 block text-sm font-medium text-ink">
+                Email address
+              </label>
+              <input
+                id="profile-email"
+                type="email"
+                className={`${inputClass} bg-page text-body`}
+                value={user.email || ''}
+                readOnly
+              />
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-card border border-line bg-surface p-6 shadow-card" aria-labelledby="licence">
+          <h2 id="licence" className="text-lg font-semibold">
+            Driving licence
+          </h2>
+          <p className="mt-1 text-sm text-body">
+            Needed for self-drive bookings. Image under 500 KB. See our{' '}
+            <Link to="/privacy" className="font-medium text-primary hover:underline">
+              privacy policy
+            </Link>{' '}
+            for how it is used.
+          </p>
+
+          <div className="mt-4">
+            {previewUrl ? (
+              <div>
+                <img
+                  src={previewUrl}
+                  alt="Your driving licence"
+                  className="max-h-56 w-full rounded-card border border-line object-contain"
+                />
+                <div className="mt-3 flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => licenceInput.current?.click()}
+                    className={buttonStyles({ variant: 'secondary', size: 'sm' })}
+                  >
+                    Replace
+                  </button>
+                  <button type="button" onClick={removeLicence} className={buttonStyles({ variant: 'ghost', size: 'sm' })}>
+                    Remove
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => licenceInput.current?.click()}
+                className="w-full rounded-card border border-dashed border-body p-8 text-center text-body hover:border-primary hover:text-primary"
+              >
+                Choose a licence image
+              </button>
+            )}
+            <input ref={licenceInput} type="file" accept="image/*" className="hidden" onChange={handleLicenceChange} />
+          </div>
+        </section>
+
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={saving}
+          className={buttonStyles({ size: 'lg', className: 'w-full' })}
+        >
+          {saving ? 'Saving' : 'Save profile'}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+export default UserProfile
