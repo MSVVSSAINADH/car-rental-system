@@ -179,7 +179,7 @@ public class DataSeeder implements CommandLineRunner {
                 car = new Car();
                 entry.applyTo(car);
                 created++;
-            } else if (!CATEGORIES.contains(car.getCategory())) {
+            } else if (car.getCategory() == null || !CATEGORIES.contains(car.getCategory())) {
                 // Legacy values (Economy, Luxury, ...) are migrated to the
                 // canonical taxonomy. Valid values are left alone so an
                 // administrator's later edit is not reverted on restart.
